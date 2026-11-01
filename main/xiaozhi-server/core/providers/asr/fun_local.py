@@ -1,6 +1,7 @@
 import os
 import io
 import sys
+import json
 import time
 import shutil
 import psutil
@@ -89,9 +90,14 @@ class ASRProvider(ASRProviderBase):
                     use_itn=True,
                     batch_size_s=60,
                 )
+                # 原始引擎输出: 完整 result(含原始 <|语种|><|情绪|><|事件|> 标签文本、
+                # rtf/load_data/extract_feat/forward 等推理统计), 不做任何加工
+                logger.bind(tag=TAG).info(
+                    f"[ASR][RAW] 引擎完整返回: {json.dumps(result, ensure_ascii=False, default=str)}"
+                )
                 text = lang_tag_filter(result[0]["text"])
-                logger.bind(tag=TAG).debug(
-                    f"语音识别耗时: {time.time() - start_time:.3f}s | 结果: {text['content']}"
+                logger.bind(tag=TAG).info(
+                    f"[ASR] 引擎识别耗时: {time.time() - start_time:.3f}s | 结果: {text['content']}"
                 )
 
                 return text, artifacts.file_path

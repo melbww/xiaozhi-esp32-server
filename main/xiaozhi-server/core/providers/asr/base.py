@@ -77,6 +77,10 @@ class ASRProviderBase(ABC):
                 pcm_bytes = b"".join(conn.asr_audio)
                 # 检查是否有足够的音频数据（每帧1920字节，15帧约28800字节）
                 if len(pcm_bytes) > 1920 * 15:
+                    logger.bind(tag=TAG).info(
+                        f"[ASR] 开始识别, 音频 {len(pcm_bytes)} 字节 "
+                        f"({len(pcm_bytes) / 32000:.2f}s @16kHz单声道)"
+                    )
                     await self.handle_voice_stop(conn, [pcm_bytes])
                 conn.reset_audio_states()
 
@@ -157,7 +161,7 @@ class ASRProviderBase(ABC):
 
             # 性能监控
             total_time = time.monotonic() - total_start_time
-            logger.bind(tag=TAG).debug(f"总处理耗时: {total_time:.3f}s")
+            logger.bind(tag=TAG).info(f"[ASR] 识别完成, 耗时 {total_time:.3f}s")
 
             # 检查文本长度
             text_len, _ = remove_punctuation_and_length(content_for_length_check)

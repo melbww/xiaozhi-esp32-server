@@ -102,11 +102,49 @@ class VADProvider(VADProviderBase):
                     conn.client_voice_window.count(True) >= self.frame_window_threshold
                 )
 
+                # ===== 实时语音活动日志 (VAD telemetry) =====
+                # 单声道 16bit 峰值电平
+                peak = int(np.abs(audio_int16).max()) if len(audio_int16) else 0
+
+                # 语音开始: 静音 -> 有声音 (重置本次说话的状态)
+                if client_have_voice and not conn.client_have_voice:
+                    conn.vad_utterance_start_ms = time.time() * 1000
+                    conn.vad_peak_amp = 0
+                    conn.vad_last_level_ms = conn.vad_utterance_start_ms
+                    logger.bind(tag=TAG).info("[VAD] 语音开始")
+
+                # 说话期间累计峰值电平
+                if client_have_voice:
+                    if peak > conn.vad_peak_amp:
+                        conn.vad_peak_amp = peak
+                    # 约每秒打一条实时电平
+                    now_ms = time.time() * 1000
+                    if (
+                        now_ms - conn.vad_last_level_ms >= 1000
+                        and conn.vad_utterance_start_ms
+                    ):
+                        conn.vad_last_level_ms = now_ms
+                        logger.bind(tag=TAG).info(
+                            f"[VAD] 说话中... 已 {now_ms - conn.vad_utterance_start_ms:.0f}ms, "
+                            f"当前电平 {peak}/32768"
+                        )
+
                 # 如果之前有声音，但本次没有声音，且与上次有声音的时间差已经超过了静默阈值，则认为已经说完一句话
                 if conn.client_have_voice and not client_have_voice:
                     stop_duration = time.time() * 1000 - conn.vad_last_voice_time
                     if stop_duration >= self.silence_threshold_ms:
+                        first_stop = not conn.client_voice_stop
                         conn.client_voice_stop = True
+                        if first_stop:
+                            dur_ms = (
+                                time.time() * 1000 - conn.vad_utterance_start_ms
+                                if conn.vad_utterance_start_ms
+                                else 0
+                            )
+                            logger.bind(tag=TAG).info(
+                                f"[VAD] 语音结束, 说话时长 {dur_ms:.0f}ms, "
+                                f"峰值电平 {conn.vad_peak_amp}/32768"
+                            )
                 if client_have_voice:
                     conn.client_have_voice = True
                     conn.vad_last_voice_time = time.time() * 1000

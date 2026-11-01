@@ -1,0 +1,22 @@
+# 镜像源回退 override (仅当 ghcr.nju.edu.cn 拉取持续失败时使用)
+#
+# 用法:
+#   docker compose --project-name xiaozhi \
+#     --project-directory my_explorations/digital-human/deploy \
+#     -f main/xiaozhi-server/docker-compose_all.yml \
+#     -f my_explorations/digital-human/deploy/docker-compose.mirror.yml \
+#     up -d
+#
+# 国内可用镜像源 (2026-11 实测均可达):
+#   - ghcr.nju.edu.cn   (默认, 南京大学镜像, 偶发大文件断流)
+#   - ghcr.m.daocloud.io (DaoCloud 镜像)
+#   - ghcr.1ms.run       (1ms 镜像)
+#
+# 说明: 国内网络无需 VPN 即可访问上述镜像源 (均为国内节点)。
+#       TUN 模式仅在直连 ghcr.io 原始源时才需要, 且 NO_PROXY 含 .cn,
+#       对国内镜像源不会改变路由。
+services:
+  xiaozhi-esp32-server:
+    image: ghcr.m.daocloud.io/xinnan-tech/xiaozhi-esp32-server:server_latest
+  xiaozhi-esp32-server-web:
+    image: ghcr.m.daocloud.io/xinnan-tech/xiaozhi-esp32-server:web_latest
