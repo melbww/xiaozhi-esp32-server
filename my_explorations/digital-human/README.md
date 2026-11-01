@@ -4,16 +4,14 @@
 > 并沉淀可复用的 IaC(脚本 + 容器化)。
 > 行动追踪见 [SESSION_LOG.md](./SESSION_LOG.md)。
 
-## 状态: ✅ 运行中
+## 状态(2026-11-02)
 
-| 项 | 值 |
-|----|----|
-| 页面 | http://127.0.0.1:8006/index.html |
-| 唤醒词事件桥 | ws://127.0.0.1:8006/wakeword-ws |
-| 健康检查 | http://127.0.0.1:8006/health → `{"status":"ok"}` |
-| 进程 | PID 见 `.digital-human.pid`(由 start.sh 维护) |
-| 日志 | `main/digital-human/digital-human.log` |
-| 唤醒词 | 已启用,模型已就位,默认词表(你好小智 等) |
+| 组件 | 状态 |
+|------|------|
+| Docker 全栈(对话引擎 :8000 / 智控台 :8002) | ✅ up(用 `iac/docker-stack.sh status` 确认) |
+| 数字人运行时 :8006(唤醒词 + 页面 + 日志页) | ⏸ 当前已停;用 `iac/start.sh [--background]` 启动 |
+| 页面 / Live Logs WebUI | http://127.0.0.1:8006/index.html · http://127.0.0.1:8006/logs.html(运行时启动后可用) |
+| 日志 | 运行时:`main/digital-human/digital-human.log`;对话引擎:`deploy/logs/server.log` |
 
 ## 全栈联调状态(2026-11-01)
 
@@ -42,6 +40,21 @@ my_explorations/digital-human/iac/start.sh --background
 # 3. 停止
 my_explorations/digital-human/iac/stop.sh
 ```
+
+### 启动/停止范围:谁控制什么(重要)
+
+这套系统由**三个独立组件**组成,`start.sh/stop.sh` 只控制其中**一个**:
+
+| 组件 | 由谁控制 | 作用 | 停了会怎样 |
+|------|---------|------|-----------|
+| **数字人运行时**(:8006) | `iac/start.sh` / `iac/stop.sh` | 页面托管 + 本地唤醒词检测 + 事件桥 | 页面打不开、唤醒词失效;**但已打开的浏览器页面仍能继续对话** |
+| **对话引擎** xiaozhi-server(:8000) + 全栈(MySQL/Redis/manager :8002) | `iac/docker-stack.sh up / down` | ASR(SenseVoice)/LLM/TTS 全部重活 | 语音识别、LLM、TTS、对话全部停止 |
+| **浏览器页面**(模拟 ESP32) | 浏览器标签页 | OTA 握手 → WS 直连 :8000 对话 | 关掉标签页 = 断开对话 |
+
+> **关键认知**: 对话发生在 **浏览器页面 ↔ xiaozhi-server(:8000)** 之间,与运行时(:8006)**无关**。
+> `stop.sh` 只停"唤醒词 + 页面托管";若浏览器标签页还开着且已连上 :8000,
+> 服务器会继续用**页面麦克风**收音并回复(这就是"停了还在回答"的原因)。
+> 想彻底停止对话:关闭浏览器标签页,或 `docker-stack.sh down` / `docker stop xiaozhi-esp32-server`。
 
 ## 这个模块是什么(一句话)
 
