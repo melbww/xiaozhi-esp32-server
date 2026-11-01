@@ -16,23 +16,7 @@ DH_DIR="$ROOT/main/digital-human"
 RT_DIR="$DH_DIR/wakeword_runtime"
 VENV_DIR="$DH_DIR/.venv"
 MODEL_DIR="$RT_DIR/models"
-# 唤醒词模型选择: MODEL=zhen(默认, 中英混合) | zh(纯中文) | en(纯英文, 需 BPE, 暂不支持)
-MODEL="${MODEL:-zhen}"
-case "$MODEL" in
-  zhen)
-    MODEL_VER="sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20"
-    ENC_GLOB="encoder-*-chunk-16-left-64.onnx"          # 优先 fp32, 见下方逻辑
-    ;;
-  zh)
-    MODEL_VER="sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
-    ENC_GLOB="encoder-epoch-99-avg-1-chunk-16-left-64.onnx"
-    ;;
-  en)
-    err "纯英文模型 (gigaspeech) 使用 BPE 分词, 当前运行时未支持; 请用 MODEL=zhen"
-    exit 1
-    ;;
-  *) err "未知模型: $MODEL (可选 zhen/zh/en)"; exit 1 ;;
-esac
+MODEL_VER="sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
 MODEL_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/${MODEL_VER}.tar.bz2"
 
 REQUIRED=(encoder.onnx decoder.onnx joiner.onnx tokens.txt)
@@ -81,13 +65,14 @@ else
   SRC="$RT_DIR/$MODEL_VER"
   [ -d "$SRC" ] || { err "model dir not found after extract: $SRC"; exit 1; }
 
-  # 复制模型文件 (fp32 优先, 回退 int8)
+  # 精度优先 (方案一): epoch-99 fp32
   for f in encoder decoder joiner; do
-    src_file="$(ls "$SRC"/${f}-*-chunk-16-left-64.onnx 2>/dev/null | grep -v int8 | head -1)"
-    if [ -z "$src_file" ]; then
-      src_file="$(ls "$SRC"/${f}-*-chunk-16-left-64.int8.onnx 2>/dev/null | head -1)"
+    src_file="$SRC/${f}-epoch-99-avg-1-chunk-16-left-64.onnx"
+    if [ ! -f "$src_file" ]; then
+      # 速度优先 (方案二): epoch-99 int8
+      src_file="$SRC/${f}-epoch-99-avg-1-chunk-16-left-64.int8.onnx"
     fi
-    if [ -z "$src_file" ]; then
+    if [ ! -f "$src_file" ]; then
       err "cannot find ${f} model file in $SRC"; exit 1
     fi
     cp "$src_file" "$MODEL_DIR/$f.onnx"
@@ -96,14 +81,6 @@ else
   [ -f "$SRC/tokens.txt" ] || { err "tokens.txt not found"; exit 1; }
   cp "$SRC/tokens.txt" "$MODEL_DIR/tokens.txt"
   log "  tokens.txt copied"
-  # 中英混合模型附带英文发音词典, 供英文唤醒词转音素
-  if [ -f "$SRC/en.phone" ]; then
-    cp "$SRC/en.phone" "$MODEL_DIR/en.phone"
-    log "  en.phone copied"
-  fi
-  # 模型包自带的 keywords.txt 是演示词, 一律丢弃,
-  # 由运行时根据默认唤醒词(中文拼音 / 英文音素)自动重新生成。
-  rm -f "$MODEL_DIR/keywords.txt"
   rm -rf "$SRC"
 fi
 
@@ -112,7 +89,6 @@ log "verify final layout:"
 for f in "${REQUIRED[@]}"; do
   [ -f "$MODEL_DIR/$f" ] && echo "  [ok] $MODEL_DIR/$f" || { err "missing $MODEL_DIR/$f"; exit 1; }
 done
-[ "$MODEL" = "zhen" ] && [ -f "$MODEL_DIR/en.phone" ] && echo "  [ok] $MODEL_DIR/en.phone"
 
 # keywords.txt 由运行时按需自动生成, 无需手动创建
 log "done. start with:  my_explorations/digital-human/iac/start.sh"
