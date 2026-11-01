@@ -96,9 +96,10 @@ my_explorations/digital-human/iac/docker-stack.sh logs web   # 查看 manager-ap
 my_explorations/digital-human/iac/docker-stack.sh down       # 停止
 ```
 
-> **开发调试覆盖**: `iac/compose.server-source.yml` 会被 docker-stack.sh 自动加载,
-> 把本地 `main/xiaozhi-server/core` bind-mount 进容器, 使 core 下的源码改动
-> (含下方 LLM 请求/响应全文日志)即时生效, 无需重新构建镜像。
+> **开发调试覆盖**: `iac/compose.server-source.yml` 会被 docker-stack.sh 自动加载, 把
+> 本地 `main/xiaozhi-server/core` bind-mount 进容器, 使 core 下的源码改动
+> (含下方 LLM 请求/响应全文日志)即时生效, 无需重新构建镜像;
+> 同时把容器内 `tmp/`(server.log)落盘到 `deploy/logs/`, 容器重建不丢日志。
 > 不需要时删除该文件(或去掉 COMPOSE_ARGS 中的 `-f` 即可)。
 
 ### 查看 LLM 完整请求/响应日志(远端 LLM 往返)
@@ -111,10 +112,40 @@ my_explorations/digital-human/iac/docker-stack.sh down       # 停止
 docker-stack.sh logs server            # 或 docker logs -f xiaozhi-esp32-server
 # 只看 LLM 往返:
 docker logs -f xiaozhi-esp32-server 2>&1 | grep -E "LLM 请求|LLM 响应全文|LLM 工具调用|HTTP Request: POST|大模型收到用户消息"
+# 持久化日志(容器内 tmp/ 已落盘到主机):
+tail -f my_explorations/digital-human/deploy/logs/server.log
 ```
 
 日志形状: `LLM 请求 -> https://api.deepseek.com model=deepseek-flash messages=[{...全文...}]`,
 回复时 `LLM 响应全文: ...`(带工具调用时另有 `LLM 工具调用: [...]`)。
+
+### 查看语音转文字(ASR)实时过程日志
+
+VAD/SenseVoice 已加实时埋点(INFO 级), 说话时 `tail -f` 即可看到全过程:
+
+```bash
+tail -f my_explorations/digital-human/deploy/logs/server.log
+# 只看语音相关:
+grep -E "\[VAD\]|\[ASR\]" my_explorations/digital-human/deploy/logs/server.log
+```
+
+说话 → 识别的完整日志流(实时):
+
+```text
+[VAD] 语音开始
+[VAD] 说话中... 已 1320ms, 当前电平 18432/32768     ← 约每秒一条, 说话时实时刷新
+[VAD] 语音结束, 说话时长 1980ms, 峰值电平 30120/32768
+[ASR] 开始识别, 音频 63360 字节 (1.98s @16kHz单声道)
+[ASR] 引擎识别耗时: 3.312s | 结果: 你可以查询下新闻吗？
+[ASR] 识别完成, 耗时 3.351s
+识别语言: zh
+识别情绪: 😶
+识别文本: 你可以查询下新闻吗？
+```
+
+> 提示: 当前是离线 SenseVoice, 识别在说完话后才开始(耗时约 1.2~1.5× 音频时长)。
+> 想边说话边出字(流式), 需换 streaming ASR 引擎(见对话记录), 暂未启用。
+
 
 
 ### 要点
