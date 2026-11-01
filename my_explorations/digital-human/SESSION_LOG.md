@@ -30,6 +30,21 @@
 | 21 | 17:36 | 编写 `bootstrap-admin.py`(SM2+captcha+register+login+取 server.secret) | ✅ gmssl 已装入 digital-human venv |
 | 22 | 17:36 | 编写 `docker-stack.sh`(up/down/status/logs/restart/bootstrap) | ✅ chmod +x |
 | 23 | 17:36 | `docker compose pull` 全量镜像 | ⏳ redis 完成;server/web/mysql 拉取中 |
+| 24 | 18:00 | 修复 deploy/models 符号链接:绝对路径 → 相对路径 `../../../main/xiaozhi-server/models` | ✅ 可移植;git 中显示为文件(120000 符号链接模式)属正常 |
+| 25 | 18:05 | 诊断 web_latest 拉取卡死 | ❌ 日志显示 `short read ... unexpected EOF`——镜像源断流,非网络封锁 |
+| 26 | 18:05 | **网络诊断结论(中国网络)** | `ghcr.nju.edu.cn` 国内镜像直连可达(60ms);本地已有代理 7897(Clash);`NO_PROXY` 含 `.cn`,TUN 模式对国内镜像无意义 → **无需 VPN/TUN** |
+| 27 | 18:06 | 编写镜像回退 override `deploy/docker-compose.mirror.yml`(DaoCloud/1ms) | ✅ 备选 |
+| 28 | 18:06 | 后台重试 web_latest 拉取(带 3 次重试) | ⏳ 进行中 |
+
+## 网络/镜像结论 (2026-11-01, 中国网络)
+
+- 镜像源 `ghcr.nju.edu.cn`(南京大学 GHCR 镜像)国内直连, 响应 60ms。
+- web_latest 体积大(数 GB), 镜像源大文件传输偶发 `unexpected EOF` 断流。
+- **不需要 TUN 模式**: 国内镜像源直连即可; 本地已有代理(127.0.0.1:7897),
+  且 `NO_PROXY` 含 `.cn` 会使国内镜像绕过代理。
+- 若 NJU 镜像反复断流, 用 `deploy/docker-compose.mirror.yml` 切换到 DaoCloud / 1ms 镜像。
+- 只有需要直连 `ghcr.io` 原始源(例如拉其他 GitHub 容器镜像)时才需要代理/TUN,
+  届时可给 Docker Desktop 配置代理(设置 → Resources → Proxies → 127.0.0.1:7897)。
 
 ## 脚本修正记录
 
