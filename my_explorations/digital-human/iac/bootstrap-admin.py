@@ -36,13 +36,22 @@ def http(method, url, data=None, token=None, timeout=30):
         req.add_header("Authorization", f"Bearer {token}")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, json.loads(resp.read().decode("utf-8"))
+            raw = resp.read()
+            try:
+                return resp.status, json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return resp.status, None  # 非 JSON 响应(如验证码图片)
     except urllib.error.HTTPError as e:
-        return e.code, json.loads(e.read().decode("utf-8"))
+        raw = e.read()
+        try:
+            return e.code, json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return e.code, None
 
 
 def get_captcha_from_redis(container, captcha_id):
-    """验证码文本明文存在 Redis 中, 直接从容器读取"""
+    """验证码文本明文存在 Redis 中, 直接从容器读取。
+    注意: redisUtils 序列化会把字符串加上字面引号 (如 '"7tHd8"'), 需去掉。"""
     key = f"sys:captcha:{captcha_id}"
     out = subprocess.run(
         ["docker", "exec", container, "redis-cli", "GET", key],
@@ -50,6 +59,10 @@ def get_captcha_from_redis(container, captcha_id):
     ).stdout.strip()
     if not out:
         raise RuntimeError(f"Redis 中未找到验证码 {key}")
+    if len(out) >= 2 and out[0] == '"' and out[-1] == '"':
+        out = out[1:-1]  # 去掉字面引号
+    if len(out) != 5:
+        raise RuntimeError(f"验证码长度异常: {out!r} (len={len(out)})")
     return out
 
 
@@ -69,7 +82,13 @@ def main():
     ap.add_argument("--password", default="Admin@123456")
     ap.add_argument("--config-file",
                     default="/Users/wenwu/work/xiaozhi-esp32-server/my_explorations/digital-human/deploy/data/.config.yaml")
+    ap.add_argument("--set-websocket", default=None,
+                    help="把 server.websocket 参数改为该地址 (如 ws://192.168.1.6:8000/xiaozhi/v1/), 然后退出")
     args = ap.parse_args()
+
+    if args.set_websocket:
+        set_websocket(args)
+        return
 
     # 1. SM2 公钥
     code, pub = http("GET", f"{args.api}/user/pub-config")
@@ -92,26 +111,20 @@ def main():
     captcha_id, cipher = sm2_password_with_captcha(args.password)
     code, resp = http("POST", f"{args.api}/user/register",
                       {"username": args.username, "password": cipher, "captchaId": captcha_id})
-    if code != 200:
-        sys.exit(f"注册失败: {code} {resp}")
+    if code != 200 or (isinstance(resp, dict) and resp.get("code") != 0):
+        sys.exit(f"注册失败: HTTP={code} resp={resp}")
     print("     注册成功")
 
     # 4. 登录
     print("[3/5] 登录获取 token ...")
-    captcha_id, cipher = sm2_password_with_captcha(args.password)
-    code, resp = http("POST", f"{args.api}/user/login",
-                      {"username": args.username, "password": cipher, "captchaId": captcha_id})
-    if code != 200:
-        sys.exit(f"登录失败: {code} {resp}")
-    token = resp["data"]["token"]
-    print(f"     token: {token[:16]}...")
+    token = login_get_token(args, pub_key)
 
     # 5. 读取 server.secret
     print("[4/5] 读取 server.secret ...")
     code, resp = http("GET", f"{args.api}/admin/params/page?page=1&limit=20&paramCode=server.secret",
                       token=token)
-    if code != 200:
-        sys.exit(f"查询参数失败: {code} {resp}")
+    if code != 200 or (isinstance(resp, dict) and resp.get("code") != 0):
+        sys.exit(f"查询参数失败: HTTP={code} resp={resp}")
     secret = None
     for row in resp.get("data", {}).get("list", []):
         if row.get("paramCode") == "server.secret":
@@ -130,6 +143,44 @@ def main():
         f.write(content)
     print(f"     已写入 {args.config_file}")
     print("\n完成! 重启 xiaozhi-server 容器使配置生效: docker restart xiaozhi-esp32-server")
+
+
+def login_get_token(args, pub_key=None):
+    """登录并返回 token (供其它模式复用)"""
+    if pub_key is None:
+        _, pub = http("GET", f"{args.api}/user/pub-config")
+        pub_key = pub["data"]["sm2PublicKey"]
+    captcha_id = str(uuid.uuid4())
+    http("GET", f"{args.api}/user/captcha?uuid={captcha_id}")
+    captcha = get_captcha_from_redis(args.redis_container, captcha_id)
+    cipher = sm2_encrypt(pub_key, captcha + args.password)
+    code, resp = http("POST", f"{args.api}/user/login",
+                      {"username": args.username, "password": cipher, "captchaId": captcha_id})
+    if code != 200 or (isinstance(resp, dict) and resp.get("code") != 0):
+        sys.exit(f"登录失败: HTTP={code} resp={resp}")
+    return resp["data"]["token"]
+
+
+def set_websocket(args):
+    """将 server.websocket 参数改为可达地址 (供全栈部署时指向宿主机/局域网)"""
+    _, pub = http("GET", f"{args.api}/user/pub-config")
+    pub_key = pub["data"]["sm2PublicKey"]
+    token = login_get_token(args, pub_key)
+
+    code, resp = http("GET", f"{args.api}/admin/params/page?page=1&limit=20&paramCode=server.websocket",
+                      token=token)
+    if code != 200 or (isinstance(resp, dict) and resp.get("code") != 0):
+        sys.exit(f"查询 server.websocket 失败: HTTP={code} resp={resp}")
+    row = next((r for r in resp.get("data", {}).get("list", [])
+                if r.get("paramCode") == "server.websocket"), None)
+    if not row:
+        sys.exit("未找到 server.websocket 参数")
+    dto = {k: row.get(k) for k in ("id", "paramCode", "paramValue", "valueType", "remark")}
+    dto["paramValue"] = args.set_websocket
+    code, resp = http("PUT", f"{args.api}/admin/params", dto, token=token)
+    if code != 200 or (isinstance(resp, dict) and resp.get("code") != 0):
+        sys.exit(f"更新 server.websocket 失败: HTTP={code} resp={resp}")
+    print(f"server.websocket 已更新为: {args.set_websocket}")
 
 
 if __name__ == "__main__":

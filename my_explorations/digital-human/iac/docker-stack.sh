@@ -51,6 +51,13 @@ case "${1:-up}" in
   bootstrap)
     VENV_PY="$ROOT/main/digital-human/.venv/bin/python"
     [ -x "$VENV_PY" ] || { echo "venv 不存在, 先运行 setup.sh" >&2; exit 1; }
+    # 若 data/.config.yaml 不存在 (全新克隆), 从模板生成 (secret 仍是 PLACEHOLDER, 稍后回填)
+    DATA_CFG="$PROJECT_DIR/data/.config.yaml"
+    if [ ! -f "$DATA_CFG" ]; then
+      mkdir -p "$PROJECT_DIR/data"
+      cp "$PROJECT_DIR/config.template.yaml" "$DATA_CFG"
+      echo "已从模板生成 $DATA_CFG"
+    fi
     "$VENV_PY" -c "import gmssl" 2>/dev/null || "$VENV_PY" -m pip install -q gmssl
     "$VENV_PY" "$ROOT/my_explorations/digital-human/iac/bootstrap-admin.py" \
       --api "http://127.0.0.1:8002/xiaozhi" \

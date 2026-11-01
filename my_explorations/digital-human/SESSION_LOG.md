@@ -36,6 +36,51 @@
 | 27 | 18:06 | 编写镜像回退 override `deploy/docker-compose.mirror.yml`(DaoCloud/1ms) | ✅ 备选 |
 | 28 | 18:06 | 后台重试 web_latest 拉取(带 3 次重试) | ⏳ 进行中 |
 
+## 全栈联调阶段 (2026-11-01 晚)
+
+| # | 时间 | 动作 | 结果 |
+|---|------|------|------|
+| 29 | 20:3x | 诊断 web_latest 拉取卡死:镜像源断流 + **本地层缓存损坏**(digest mismatch) | 与网络封锁无关;**无需 VPN/TUN** |
+| 30 | 20:3x | `docker system prune` 清理 12.6GB 损坏/悬空数据 | ✅ |
+| 31 | 20:4x | 换 **ghcr.1ms.run** 镜像拉取 web_latest | ✅ 约 20s 完成(比 NJU 快得多),retag 为 nju 名 |
+| 32 | 20:4x | `docker compose up -d` 全栈启动 | ✅ 4 容器全 Up;db/redis healthy;manager-api HTTP 200 |
+| 33 | 20:5x | 引擎容器 crash-loop(placeholder secret)→ bootstrap 脚本 | 见下方「bootstrap 排障」 |
+| 34 | 20:5x | `server.secret` 回填 `.config.yaml` + restart 引擎 | ✅ 引擎成功连上 manager-api,VAD/ASR(FunASR+SenseVoice)初始化成功,WS 监听 :8000 |
+| 35 | 20:5x | OTA 冒烟测试 | ⚠️ 返回占位地址 `ws://xiaozhi.server.com:8000` |
+| 36 | 20:5x | 用 API 把 `server.websocket` 参数改为 `ws://192.168.1.6:8000/xiaozhi/v1/` | ✅ 通过服务端 WS 连通校验 |
+| 37 | 20:5x | 复测 OTA + WS hello | ✅ OTA 返回正确 LAN 地址;WS 端口连通;引擎回复"端口正常…请启动digital-human测试"(设备未绑定的提示) |
+
+## bootstrap 排障记录 (重要踩坑)
+
+1. **验证码带字面引号**:Redis 中验证码存为 `'"7tHd8"'`(redisUtils JSON 序列化加了引号),
+   直接读出来当验证码会失败 → 脚本需 `strip('"')` 并校验长度=5。
+2. **HTTP 200 ≠ 成功**:接口业务失败时 HTTP 状态仍是 200,body 里 `code:10067`。
+   脚本必须检查 `resp["code"] == 0`,否则会误报"注册成功"。
+3. **验证码接口返回 GIF 图片**:`http()` 需容忍非 JSON 响应(图片)。
+4. **更新参数需完整 DTO**:`server.websocket` 更新报 `Value type cannot be empty`,
+   PUT 时必须带上 `valueType` 字段。
+
+## 当前运行状态 (2026-11-01 21:00)
+
+| 项 | 状态 |
+|----|------|
+| digital-human 页面 | ✅ :8006 |
+| xiaozhi-server 引擎 | ✅ :8000(WS) / :8003(OTA/视觉),已连 manager-api,本地 ASR 就绪 |
+| manager-api + 智控台 | ✅ :8002(HTTP 200,doc.html 可用) |
+| MySQL / Redis | ✅ healthy |
+| 管理员账号 | ✅ admin / Admin@123456(首次注册=超管) |
+| OTA 握手 → WS 连通 | ✅ 链路通 |
+| **语音对话** | ⏳ 待办:①智控台把设备绑定到 Agent ②配置 LLM API Key |
+| 遗留 | 唤醒词仍在 PC(数字人)或固件内;manager-web 的 nginx 端口 8001 未单独暴露(web 与 api 同镜像) |
+
+## 待办清单 (用户操作)
+
+1. 浏览器打开 **http://127.0.0.1:8002** 登录 admin / Admin@123456。
+2. 在「设备管理」把冒烟测试/digital-human 的 MAC 注册并绑定到某个智能体(Agent)。
+3. 在「模型配置」添加一个 **LLM**(如智谱免费 glm-4-flash)并绑到该 Agent。
+4. 打开数字人页面 http://127.0.0.1:8006/index.html,OTA 地址保持
+   `http://127.0.0.1:8002/xiaozhi/ota/`,点连接即可全链路语音对话。
+
 ## 网络/镜像结论 (2026-11-01, 中国网络)
 
 - 镜像源 `ghcr.nju.edu.cn`(南京大学 GHCR 镜像)国内直连, 响应 60ms。

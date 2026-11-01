@@ -15,6 +15,20 @@
 | 日志 | `main/digital-human/digital-human.log` |
 | 唤醒词 | 已启用,模型已就位,默认词表(你好小智 等) |
 
+## 全栈联调状态(2026-11-01)
+
+| 项 | 状态 |
+|----|------|
+| xiaozhi-server | ✅ :8000(WS)/:8003,已连 manager-api,本地 ASR(FunASR+SenseVoice)就绪 |
+| manager-api + 智控台 | ✅ :8002(admin / Admin@123456) |
+| MySQL / Redis | ✅ healthy |
+| OTA 握手 → WS 连通 | ✅ 链路通(server.websocket 已设为 LAN 地址) |
+| 语音对话 | ⏳ 需在智控台①绑定设备到 Agent ②配 LLM Key |
+| 运维 | `iac/docker-stack.sh up / down / status / logs / restart / bootstrap` |
+
+**快速开始语音对话**:浏览器开 http://127.0.0.1:8002 登录 → 设备绑定 Agent →
+模型配置加 LLM(如智谱免费 glm-4-flash)→ 数字人页面点连接。
+
 ## 一键使用
 
 ```bash
