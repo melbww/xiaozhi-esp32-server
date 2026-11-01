@@ -195,5 +195,5 @@ uploadfile
 !main/xiaozhi-server/**/*.json
 !main/digital-human/**/*.json
 main/digital-human/wakeword_runtime/models
-main/digital-human/wakeword_runtime/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01
-sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2
+main/digital-human/wakeword_runtime/sherpa-onnx-kws-*
+sherpa-onnx-kws-*.tar.bz2

@@ -248,29 +248,12 @@ class TestRuntimeHttpServer:
                 }
 
             def _build_keyword_line(self, keyword_text: str) -> str:
-                from pypinyin import Style, pinyin
+                from ..core.keyword_tokens import build_keyword_tokens
 
-                initials = pinyin(keyword_text, style=Style.INITIALS, strict=False)
-                finals = pinyin(
-                    keyword_text,
-                    style=Style.FINALS_TONE,
-                    strict=False,
-                    neutral_tone_with_five=True,
-                )
-
-                tokens: list[str] = []
-                for initial_parts, final_parts in zip(initials, finals):
-                    initial = initial_parts[0].strip()
-                    final = final_parts[0].strip()
-                    if initial:
-                        tokens.append(initial)
-                    if final:
-                        tokens.append(final)
-
-                if not tokens:
-                    raise ValueError(f"failed to generate pinyin tokens for wake word: {keyword_text}")
-
-                return f"{' '.join(tokens)} @{keyword_text}"
+                model_root = runtime_root / "models"
+                tokens = build_keyword_tokens(keyword_text, model_root)
+                # sherpa-onnx 要求 @ 后的关键字为单 token (多词用下划线连接)
+                return f"{tokens} @{keyword_text.replace(' ', '_')}"
 
             def _receive_websocket_message(self) -> str | None:
                 try:

@@ -47,12 +47,7 @@ class DetectorAssetsBuilder:
         )
 
     def _write_keywords_file(self, model_root: Path) -> Path:
-        try:
-            from pypinyin import Style, pinyin
-        except ImportError as exc:
-            raise RuntimeError(
-                "Missing dependency: pypinyin. Install runtime dependencies before generating keywords."
-            ) from exc
+        from .keyword_tokens import build_keyword_tokens
 
         wake_words = self.config.wake_words
         if not wake_words:
@@ -61,29 +56,9 @@ class DetectorAssetsBuilder:
         keywords_path = model_root / "keywords.txt"
         lines: list[str] = []
         for keyword_text in wake_words:
-            initials = pinyin(keyword_text, style=Style.INITIALS, strict=False)
-            finals = pinyin(
-                keyword_text,
-                style=Style.FINALS_TONE,
-                strict=False,
-                neutral_tone_with_five=True,
-            )
-
-            tokens: list[str] = []
-            for initial_parts, final_parts in zip(initials, finals):
-                initial = initial_parts[0].strip()
-                final = final_parts[0].strip()
-                if initial:
-                    tokens.append(initial)
-                if final:
-                    tokens.append(final)
-
-            if not tokens:
-                raise ValueError(
-                    f"failed to generate pinyin tokens for wake word: {keyword_text}"
-                )
-
-            lines.append(f"{' '.join(tokens)} @{keyword_text}")
+            tokens = build_keyword_tokens(keyword_text, model_root)
+            # sherpa-onnx 要求 @ 后的关键字为单 token (多词用下划线连接)
+            lines.append(f"{tokens} @{keyword_text.replace(' ', '_')}")
 
         keywords_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return keywords_path

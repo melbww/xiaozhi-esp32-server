@@ -81,6 +81,52 @@
 4. 打开数字人页面 http://127.0.0.1:8006/index.html,OTA 地址保持
    `http://127.0.0.1:8002/xiaozhi/ota/`,点连接即可全链路语音对话。
 
+## 唤醒词故障修复 (2026-11-01 21:0x)
+
+**现象**:start.sh 启动时 `Cannot find ID for token hi/there` → `Encode keywords failed`。
+
+**根因**:`models/keywords.txt` 被写成了英文演示词 `hi there hi there @hi there`,
+而模型 tokens.txt 是中文拼音表(227 行),没有 `hi`/`there` 词元 → 编码失败。
+(来源:模型包自带的英文 keywords.txt 或页面「唤醒词」设置保存了英文词)
+
+**修复**:
+1. 删除 `models/keywords.txt` → 运行时按中文默认唤醒词重新生成
+   (`n ǐ h ǎo x iǎo zh ì @你好小智` ... 共 11 个)。
+2. 验证:detector 初始化成功。
+3. `setup.sh` 增加防御:模型包自带 keywords.txt 一律删除,防止复发。
+4. 注意:若在页面「唤醒词」页签手动添加过英文词(如 hi there),请改回中文,
+   否则再次点「应用唤醒词」会重新写坏该文件。
+
+## 英文唤醒词支持 (2026-11-01 21:2x) —— 需求:英文 only
+
+**结论:原中文模型(wenetspeech)无法识别英文;已切换为「中英混合」模型并加英文支持。**
+
+### 模型切换
+- 原:`sherpa-onnx-kws-zipformer-wenetspeech-3.3M`(纯中文, 拼音建模)→ 英文不可用
+- 新:`sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20`(中英混合, 中文拼音 + 英文 ARPABET 音素)
+- 说明:纯英文模型(gigaspeech, BPE)运行时未支持,故用 zh-en;已把所有默认唤醒词设为英文。
+
+### 代码改动 (wakeword_runtime)
+| 文件 | 改动 |
+|------|------|
+| `core/keyword_tokens.py` (新增) | 唤醒词→token:中文走 pypinyin,英文查 `en.phone`(CMU 词典)→ ARPABET 音素 |
+| `core/detector_assets.py` | `_write_keywords_file` 复用新函数;`@` 后多词用下划线(`@hi_there`) |
+| `runtime/http_server.py` | 页面保存路径同样走新函数 + 下划线 |
+| `config/config_loader.py` | 读取 keywords.txt 时下划线还原为空格;`DEFAULT_WAKE_WORDS` 改为英文 |
+| `js/config/manager.js` | 页面默认唤醒词改为英文 |
+| `iac/setup.sh` | 支持 `MODEL=zhen|zh|en`(默认 zhen),复制 en.phone |
+| `.gitignore` | 覆盖 zh-en 模型下载目录 |
+
+### 实测
+- 生成:`HH AY1 DH EH1 R @hi_there` / `HH AH0 L OW1 @hello`
+- 加载往返:keywords.txt 下划线 ↔ 空格 正常
+- **detector 初始化成功**,digital-human 已在 :8006 以英文唤醒词运行
+
+### 注意
+- 英文唤醒词必须是 en.phone 词典里的常见词(如 hi / hello / hey there);生造词(如 xiaozhi)会报错。
+- 页面「唤醒词」页签可直接增删英文词;保存/应用即生效(会重启检测服务)。
+- 若想恢复中文,`MODEL=zh ./iac/setup.sh` 重装 + 改回中文默认词即可。
+
 ## 网络/镜像结论 (2026-11-01, 中国网络)
 
 - 镜像源 `ghcr.nju.edu.cn`(南京大学 GHCR 镜像)国内直连, 响应 60ms。
