@@ -63,3 +63,34 @@ my_explorations/digital-human/iac/stop.sh
 
 - [组件关系图](../docs/component-relationships.md)
 - [数字人 → ESP32 硬件迁移](../docs/digital-human-to-esp32-migration.md)
+
+---
+
+## 全栈联调 (digital-human ↔ xiaozhi-server ↔ manager-api)
+
+数字人页面要跑通完整语音链路,还需要 `xiaozhi-server`(WS:8000 / OTA:8003)
+和 `manager-api`(8002,含 manager-web 智控台 + MySQL + Redis)。
+
+### IaC: `iac/docker-stack.sh`
+
+```bash
+my_explorations/digital-human/iac/docker-stack.sh up         # 拉镜像 + 启动全栈
+my_explorations/digital-human/iac/docker-stack.sh bootstrap  # 自动注册管理员 + 回填 server.secret
+my_explorations/digital-human/iac/docker-stack.sh restart    # 重启 xiaozhi-server 使配置生效
+my_explorations/digital-human/iac/docker-stack.sh status     # 查看容器状态
+my_explorations/digital-human/iac/docker-stack.sh logs web   # 查看 manager-api 日志
+my_explorations/digital-human/iac/docker-stack.sh down       # 停止
+```
+
+### 要点
+
+- 复用仓库 `main/xiaozhi-server/docker-compose_all.yml`,通过 `--project-directory`
+  把 `data/`、`models/`、`mysql/`、`uploadfile/` 解析到 `deploy/` 目录,不改动仓库文件。
+- 官方镜像 **server_latest / web_latest 已含 arm64 变体**(`Deployment_all.md` 说 x86-only 已过时)。
+- 首次启动引导(被 SM2 加密 + 图形验证码挡住的手动步骤)由 `bootstrap-admin.py` 自动化:
+  从 Redis 直接读验证码明文,用 gmssl(SM2 C1C3C2)加密,注册首个超级管理员,再读取
+  `server.secret` 回填 `deploy/data/.config.yaml`。
+- OTA 归属:全栈模式下 `/xiaozhi/ota/` 由 **manager-api(:8002)** 提供,与数字人页面
+  默认 OTA 地址一致;单服务模式下才是 xiaozhi-server 的 8003。
+- 本地 ASR 依赖 `SenseVoiceSmall/model.pt`(约 1GB,ModelScope 下载),VAD 模型已就位。
+- **语音 AI 仍需用户提供 LLM API Key**(如智谱免费 `glm-4-flash`),在智控台模型配置中填写。

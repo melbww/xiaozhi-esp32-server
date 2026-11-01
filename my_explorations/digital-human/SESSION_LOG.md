@@ -20,6 +20,16 @@
 | 11 | 17:24 | 验证唤醒词 WebSocket 事件桥 | ✅ HTTP/1.1 101 Switching Protocols |
 | 12 | 17:24 | 发现 start.sh PID 捕获错误(子shell 导致),重写 start/stop 脚本 | 见下方「脚本修正」 |
 | 13 | 17:24 | stop.sh → start.sh 干净重启 | ✅ PID 文件指向真实 python 进程(57066),健康检查通过 |
+| 14 | 17:30 | 启动 Docker Desktop(daemon 未运行) | ✅ 就绪(aarch64 / Docker 29.2.1) |
+| 15 | 17:31 | 检查全栈 compose 与镜像 | ✅ `server_latest`/`web_latest` **含 arm64 变体**(文档仍写 x86-only,已过时);registry 可达 |
+| 16 | 17:32 | 检查本地模型 | ✅ silero-vad 齐全;❌ `SenseVoiceSmall/model.pt` 缺失(约 1GB) |
+| 17 | 17:33 | 后台下载 SenseVoiceSmall model.pt(ModelScope) | ⏳ 约 1GB,下载中 |
+| 18 | 17:34 | 创建部署目录 `deploy/`(data/.config.yaml + models 软链 + uploadfile) | ✅ 复用仓库 compose 不改动仓库文件 |
+| 19 | 17:35 | 确认 OTA 归属:全栈模式下 `/xiaozhi/ota/` 由 **manager-api(:8002)** 提供 | ✅ 与 digital-human 页面默认 OTA 地址一致 |
+| 20 | 17:35 | 梳理 manager-api 引导流程 | 注册需 SM2 加密密码 + 图形验证码(验证码明文存 Redis `sys:captcha:<uuid>`) |
+| 21 | 17:36 | 编写 `bootstrap-admin.py`(SM2+captcha+register+login+取 server.secret) | ✅ gmssl 已装入 digital-human venv |
+| 22 | 17:36 | 编写 `docker-stack.sh`(up/down/status/logs/restart/bootstrap) | ✅ chmod +x |
+| 23 | 17:36 | `docker compose pull` 全量镜像 | ⏳ redis 完成;server/web/mysql 拉取中 |
 
 ## 脚本修正记录
 
