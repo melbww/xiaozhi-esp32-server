@@ -18,12 +18,12 @@
 
 ```mermaid
 flowchart LR
-    subgraph 主线1: 语音(实时)
+    subgraph 主线1["主线1: 语音(实时)"]
         A[设备/数字人] -- "WebSocket 8000" --> B[xiaozhi-server]
         B -- "ASR/LLM/TTS" --> C[外部AI服务]
     end
 
-    subgraph 主线2: 配置(管理)
+    subgraph 主线2["主线2: 配置(管理)"]
         D[智控台 web/mobile] -- "REST 8002" --> E[manager-api]
         E --> F[(MySQL)]
         B -- "拉取最新配置" --> E
