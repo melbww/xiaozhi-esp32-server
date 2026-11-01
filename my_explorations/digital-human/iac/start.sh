@@ -33,6 +33,7 @@ case "${1:-}" in
     echo "started digital-human in background (pid $(cat "$PID_FILE"))"
     echo "  page:     http://127.0.0.1:8006/index.html"
     echo "  bridge:   ws://127.0.0.1:8006/wakeword-ws"
+    echo "  live logs: http://127.0.0.1:8006/logs.html  (ws://127.0.0.1:8006/logs-ws)"
     echo "  health:   http://127.0.0.1:8006/health"
     echo "  log:      $LOG_FILE"
     echo "  stop:     my_explorations/digital-human/iac/stop.sh"

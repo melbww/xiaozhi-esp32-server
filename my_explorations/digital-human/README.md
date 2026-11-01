@@ -151,6 +151,33 @@ grep -E "\[VAD\]|\[ASR\]" my_explorations/digital-human/deploy/logs/server.log
 > 提示: 当前是离线 SenseVoice, 识别在说完话后才开始(耗时约 1.2~1.5× 音频时长)。
 > 想边说话边出字(流式), 需换 streaming ASR 引擎(见对话记录), 暂未启用。
 
+### Live Logs WebUI: http://127.0.0.1:8006/logs.html
+
+运行时(:8006)内置实时日志查看器, 聚合所有层级并支持筛选:
+
+- **数据源**: `server`(`docker logs -f xiaozhi-esp32-server`, 含 loguru + httpx + FunASR tqdm 全部输出)
+  与 `runtime`(本运行时唤醒词/音频日志)。
+- **实时优先**: 打开页面即从**当前**开始实时滚动, 只带最近 ~20 行上下文, 不重放历史旧会话。
+- **筛选**: 按 源 / 级别(DEBUG/INFO/WARN/ERROR) / 阶段(VAD/ASR/LLM/TTS/HTTP/MCP/WAKE/SYS)
+  / 关键字 过滤; 支持暂停、清屏、自动滚动(仅贴底时跟随, 空格硬切换)。
+- 每行带 源、级别、阶段 徽标, 按阶段着色(ASR 绿 / ASR RAW 加粗 / LLM 橙 / TTS 紫…)。
+
+实现: `wakeword_runtime/log_streamer.py`(多源广播) + `/logs-ws` 端点 + `main/digital-human/logs.html`。
+
+```bash
+open http://127.0.0.1:8006/logs.html    # 直接浏览器打开
+# 命令行裸测 WS(打印前 5 帧):
+main/digital-human/.venv/bin/python - <<'PY'
+import asyncio, json, websockets
+async def t():
+    async with websockets.connect("ws://127.0.0.1:8006/logs-ws") as ws:
+        for _ in range(5):
+            m = json.loads(await ws.recv())
+            print(m.get("type") or f"[{m.get('source')}/{m.get('level')}] {m.get('line','')[:80]}")
+asyncio.run(t())
+PY
+```
+
 
 
 ### 要点
