@@ -24,8 +24,8 @@
 ```mermaid
 sequenceDiagram
     participant Dev as 设备/数字人
-    participant OTA as OTA接口(全栈: manager-api :8002)
-    participant WS as xiaozhi-server :8000
+    participant OTA as "OTA接口(全栈: manager-api :8002)"
+    participant WS as "xiaozhi-server :8000"
 
     Dev->>OTA: POST /xiaozhi/ota/ (设备信息)
     OTA-->>Dev: { websocket: { url, token } }

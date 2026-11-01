@@ -12,6 +12,9 @@
 | [04 设备协议](04-device-protocol.md) | 设备 ↔ 服务器之间的"语言"(WebSocket 消息) |
 | [05 定制指南](05-customization-guide.md) | "我想改 X" → 去改哪个文件 |
 
+> 🌐 English versions available: `*.en.md` (e.g. [01-system-overview.en.md](01-system-overview.en.md)),
+> index at [README.en.md](README.en.md)。
+
 ---
 
 ## 一图流:两大平面
