@@ -96,6 +96,27 @@ my_explorations/digital-human/iac/docker-stack.sh logs web   # 查看 manager-ap
 my_explorations/digital-human/iac/docker-stack.sh down       # 停止
 ```
 
+> **开发调试覆盖**: `iac/compose.server-source.yml` 会被 docker-stack.sh 自动加载,
+> 把本地 `main/xiaozhi-server/core` bind-mount 进容器, 使 core 下的源码改动
+> (含下方 LLM 请求/响应全文日志)即时生效, 无需重新构建镜像。
+> 不需要时删除该文件(或去掉 COMPOSE_ARGS 中的 `-f` 即可)。
+
+### 查看 LLM 完整请求/响应日志(远端 LLM 往返)
+
+默认日志(INFO)只显示 `大模型收到用户消息` / `HTTP Request: ... 200 OK` / TTS 分段。
+已在本仓库 `core/providers/llm/openai/openai.py` 打了补丁(随上述覆盖自动生效),
+现在每轮对话会额外打印**发给远端 LLM 的完整 JSON**(messages/tools)和**流式响应的全文**:
+
+```bash
+docker-stack.sh logs server            # 或 docker logs -f xiaozhi-esp32-server
+# 只看 LLM 往返:
+docker logs -f xiaozhi-esp32-server 2>&1 | grep -E "LLM 请求|LLM 响应全文|LLM 工具调用|HTTP Request: POST|大模型收到用户消息"
+```
+
+日志形状: `LLM 请求 -> https://api.deepseek.com model=deepseek-flash messages=[{...全文...}]`,
+回复时 `LLM 响应全文: ...`(带工具调用时另有 `LLM 工具调用: [...]`)。
+
+
 ### 要点
 
 - 复用仓库 `main/xiaozhi-server/docker-compose_all.yml`,通过 `--project-directory`

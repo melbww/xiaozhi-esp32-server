@@ -21,8 +21,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 COMPOSE="$ROOT/main/xiaozhi-server/docker-compose_all.yml"
 PROJECT_DIR="$ROOT/my_explorations/digital-human/deploy"
 PROJECT_NAME="xiaozhi"
+# 开发调试覆盖: 将本地 main/xiaozhi-server/core bind-mount 进容器(见该文件头注释)
+SOURCE_OVERRIDE="$ROOT/my_explorations/digital-human/iac/compose.server-source.yml"
 
-COMPOSE_ARGS=(--project-name "$PROJECT_NAME" --project-directory "$PROJECT_DIR" -f "$COMPOSE")
+# 供 compose 插值 ${XIAOZHI_REPO_ROOT}(覆盖文件中的相对路径基准)
+export XIAOZHI_REPO_ROOT="$ROOT"
+
+COMPOSE_ARGS=(--project-name "$PROJECT_NAME" --project-directory "$PROJECT_DIR" -f "$COMPOSE" -f "$SOURCE_OVERRIDE")
 
 case "${1:-up}" in
   up)
