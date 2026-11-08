@@ -31,8 +31,11 @@ COMPOSE_ARGS=(--project-name "$PROJECT_NAME" --project-directory "$PROJECT_DIR" 
 
 case "${1:-up}" in
   up)
-    docker compose "${COMPOSE_ARGS[@]}" pull
-    docker compose "${COMPOSE_ARGS[@]}" up -d
+    # 镜像源可能被墙/断流;已有本地镜像时不要让 pull 失败阻断启动
+    if ! docker compose "${COMPOSE_ARGS[@]}" pull; then
+      echo "WARNING: 镜像拉取失败,改用本地已有镜像启动" >&2
+    fi
+    docker compose "${COMPOSE_ARGS[@]}" up -d --pull never
     echo "---"
     docker compose --project-name "$PROJECT_NAME" ps
     echo "提示: 智控台 http://127.0.0.1:8002  WS:8000  OTA/视觉:8003"

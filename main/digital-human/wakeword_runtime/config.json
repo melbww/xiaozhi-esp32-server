@@ -1,6 +1,6 @@
 {
   "wakeword": {
-    "enabled": true
+    "enabled": false
   },
   "model_dir": "models",
   "audio": {

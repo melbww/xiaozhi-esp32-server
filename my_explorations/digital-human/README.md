@@ -9,7 +9,7 @@
 | 组件 | 状态 |
 |------|------|
 | Docker 全栈(对话引擎 :8000 / 智控台 :8002) | ✅ up(用 `iac/docker-stack.sh status` 确认) |
-| 数字人运行时 :8006(唤醒词 + 页面 + 日志页) | ⏸ 当前已停;用 `iac/start.sh [--background]` 启动 |
+| 数字人运行时 :8006(唤醒词 + 页面 + 日志页) | ⏸ 已停(2026-11-08 与机器人解耦);仅浏览器测试时用 `iac/start.sh [--background]` 启动 |
 | 页面 / Live Logs WebUI | http://127.0.0.1:8006/index.html · http://127.0.0.1:8006/logs.html(运行时启动后可用) |
 | 日志 | 运行时:`main/digital-human/digital-human.log`;对话引擎:`deploy/logs/server.log` |
 
@@ -192,6 +192,12 @@ PY
 ```
 
 
+
+### 本地低延迟 TTS (已移出本模块)
+
+低延迟 TTS 已独立到 **`my_explorations/local-say-tts/`**, 不再依赖
+digital-human 运行时。机器人链路只需要 `xiaozhi-server` + 该 TTS 服务;
+详见 `my_explorations/local-say-tts/README.md`。
 
 ### 要点
 
