@@ -8,24 +8,15 @@
 
 | 组件 | 状态 |
 |------|------|
-| Docker 全栈(对话引擎 :8000 / 智控台 :8002) | ✅ up(用 `iac/docker-stack.sh status` 确认) |
+| 后端全栈(对话引擎 :8000 / 智控台 :8002) | 已独立到 [`../server/`](../server/README.md) |
 | 数字人运行时 :8006(唤醒词 + 页面 + 日志页) | ⏸ 已停(2026-11-08 与机器人解耦);仅浏览器测试时用 `iac/start.sh [--background]` 启动 |
 | 页面 / Live Logs WebUI | http://127.0.0.1:8006/index.html · http://127.0.0.1:8006/logs.html(运行时启动后可用) |
-| 日志 | 运行时:`main/digital-human/digital-human.log`;对话引擎:`deploy/logs/server.log` |
+| 日志 | 运行时:`main/digital-human/digital-human.log` |
 
-## 全栈联调状态(2026-11-01)
-
-| 项 | 状态 |
-|----|------|
-| xiaozhi-server | ✅ :8000(WS)/:8003,已连 manager-api,本地 ASR(FunASR+SenseVoice)就绪 |
-| manager-api + 智控台 | ✅ :8002(admin / Admin@123456) |
-| MySQL / Redis | ✅ healthy |
-| OTA 握手 → WS 连通 | ✅ 链路通(server.websocket 已设为 LAN 地址) |
-| 语音对话 | ⏳ 需在智控台①绑定设备到 Agent ②配 LLM Key |
-| 运维 | `iac/docker-stack.sh up / down / status / logs / restart / bootstrap` |
-
-**快速开始语音对话**:浏览器开 http://127.0.0.1:8002 登录 → 设备绑定 Agent →
-模型配置加 LLM(如智谱免费 glm-4-flash)→ 数字人页面点连接。
+> **边界（2026-11-09 拆分）:** 机器人后端（xiaozhi-server、manager-api、
+> MySQL、Redis、部署 IaC 与运行数据）已移到
+> [`my_explorations/server/`](../server/README.md)。本目录只保留浏览器模拟器
+> 和本地唤醒词运行时；机器人链路不需要它。
 
 ## 一键使用
 
@@ -48,13 +39,14 @@ my_explorations/digital-human/iac/stop.sh
 | 组件 | 由谁控制 | 作用 | 停了会怎样 |
 |------|---------|------|-----------|
 | **数字人运行时**(:8006) | `iac/start.sh` / `iac/stop.sh` | 页面托管 + 本地唤醒词检测 + 事件桥 | 页面打不开、唤醒词失效;**但已打开的浏览器页面仍能继续对话** |
-| **对话引擎** xiaozhi-server(:8000) + 全栈(MySQL/Redis/manager :8002) | `iac/docker-stack.sh up / down` | ASR(SenseVoice)/LLM/TTS 全部重活 | 语音识别、LLM、TTS、对话全部停止 |
+| **对话引擎** xiaozhi-server(:8000) + 全栈(MySQL/Redis/manager :8002) | [`../server/iac/docker-stack.sh`](../server/iac/docker-stack.sh) `up / down` | ASR(SenseVoice)/LLM/TTS 全部重活 | 语音识别、LLM、TTS、对话全部停止 |
 | **浏览器页面**(模拟 ESP32) | 浏览器标签页 | OTA 握手 → WS 直连 :8000 对话 | 关掉标签页 = 断开对话 |
 
 > **关键认知**: 对话发生在 **浏览器页面 ↔ xiaozhi-server(:8000)** 之间,与运行时(:8006)**无关**。
 > `stop.sh` 只停"唤醒词 + 页面托管";若浏览器标签页还开着且已连上 :8000,
 > 服务器会继续用**页面麦克风**收音并回复(这就是"停了还在回答"的原因)。
-> 想彻底停止对话:关闭浏览器标签页,或 `docker-stack.sh down` / `docker stop xiaozhi-esp32-server`。
+> 想彻底停止对话:关闭浏览器标签页,或 `server/iac/docker-stack.sh down` /
+> `docker stop xiaozhi-esp32-server`。
 
 ## 这个模块是什么(一句话)
 
@@ -93,121 +85,12 @@ my_explorations/digital-human/iac/stop.sh
 
 ---
 
-## 全栈联调 (digital-human ↔ xiaozhi-server ↔ manager-api)
+## 后端 (Desk Bot 01)
 
-数字人页面要跑通完整语音链路,还需要 `xiaozhi-server`(WS:8000 / OTA:8003)
-和 `manager-api`(8002,含 manager-web 智控台 + MySQL + Redis)。
+机器人后端不在本目录，已拆分到 [`../server/`](../server/README.md)：
 
-### IaC: `iac/docker-stack.sh`
+- 启动/停止后端：`my_explorations/server/iac/docker-stack.sh up|down|status`
+- 首次引导、智控台、OTA/WS 参数、日志、冒烟测试：见 [server/README.md](../server/README.md)
+- 本地低延迟 TTS：见 [../local-say-tts/README.md](../local-say-tts/README.md)
 
-```bash
-my_explorations/digital-human/iac/docker-stack.sh up         # 拉镜像 + 启动全栈
-my_explorations/digital-human/iac/docker-stack.sh bootstrap  # 自动注册管理员 + 回填 server.secret
-my_explorations/digital-human/iac/docker-stack.sh restart    # 重启 xiaozhi-server 使配置生效
-my_explorations/digital-human/iac/docker-stack.sh status     # 查看容器状态
-my_explorations/digital-human/iac/docker-stack.sh logs web   # 查看 manager-api 日志
-my_explorations/digital-human/iac/docker-stack.sh down       # 停止
-```
-
-> **开发调试覆盖**: `iac/compose.server-source.yml` 会被 docker-stack.sh 自动加载, 把
-> 本地 `main/xiaozhi-server/core` bind-mount 进容器, 使 core 下的源码改动
-> (含下方 LLM 请求/响应全文日志)即时生效, 无需重新构建镜像;
-> 同时把容器内 `tmp/`(server.log)落盘到 `deploy/logs/`, 容器重建不丢日志。
-> 不需要时删除该文件(或去掉 COMPOSE_ARGS 中的 `-f` 即可)。
-
-### 查看 LLM 完整请求/响应日志(远端 LLM 往返)
-
-默认日志(INFO)只显示 `大模型收到用户消息` / `HTTP Request: ... 200 OK` / TTS 分段。
-已在本仓库 `core/providers/llm/openai/openai.py` 打了补丁(随上述覆盖自动生效),
-现在每轮对话会额外打印**发给远端 LLM 的完整 JSON**(messages/tools)和**流式响应的全文**:
-
-```bash
-docker-stack.sh logs server            # 或 docker logs -f xiaozhi-esp32-server
-# 只看 LLM 往返:
-docker logs -f xiaozhi-esp32-server 2>&1 | grep -E "LLM 请求|LLM 响应全文|LLM 工具调用|HTTP Request: POST|大模型收到用户消息"
-# 持久化日志(容器内 tmp/ 已落盘到主机):
-tail -f my_explorations/digital-human/deploy/logs/server.log
-```
-
-日志形状: `LLM 请求 -> https://api.deepseek.com model=deepseek-flash messages=[{...全文...}]`,
-回复时 `LLM 响应全文: ...`(带工具调用时另有 `LLM 工具调用: [...]`)。
-
-### 查看语音转文字(ASR)实时过程日志
-
-VAD/SenseVoice 已加实时埋点(INFO 级), 说话时 `tail -f` 即可看到全过程:
-
-```bash
-tail -f my_explorations/digital-human/deploy/logs/server.log
-# 只看语音相关:
-grep -E "\[VAD\]|\[ASR\]" my_explorations/digital-human/deploy/logs/server.log
-```
-
-说话 → 识别的完整日志流(实时):
-
-```text
-[VAD] 语音开始
-[VAD] 说话中... 已 1320ms, 当前电平 18432/32768     ← 约每秒一条, 说话时实时刷新
-[VAD] 语音结束, 说话时长 1980ms, 峰值电平 30120/32768
-[ASR] 开始识别, 音频 63360 字节 (1.98s @16kHz单声道)
-[ASR][RAW] 引擎完整返回: [{"key": "...", "text": "<|zh|><|Speech|><|withitn|>你好，我是小智。", "rtf": 1.25, ...}]   ← 原始引擎输出(含标签文本+推理统计), 不做加工
-[ASR] 引擎识别耗时: 3.312s | 结果: 你好，我是小智。
-[ASR] 识别完成, 耗时 3.351s
-识别语言: zh
-识别情绪: 😶
-识别文本: 你好，我是小智。
-```
-
-> `[ASR][RAW]` 是**最低层的引擎原始返回**: 完整 `result` JSON(原始 `<|语种|><|情绪|><|事件|>` 标签文本、
-> 以及引擎返回的 `rtf/load_data/extract_feat/forward` 等推理统计), 每次语音→文本都会打一条。
-> 再往下的引擎内部 stdout/tqdm 进度条属于第三方库内部输出, 未接入本日志。
-
-> 提示: 当前是离线 SenseVoice, 识别在说完话后才开始(耗时约 1.2~1.5× 音频时长)。
-> 想边说话边出字(流式), 需换 streaming ASR 引擎(见对话记录), 暂未启用。
-
-### Live Logs WebUI: http://127.0.0.1:8006/logs.html
-
-运行时(:8006)内置实时日志查看器, 聚合所有层级并支持筛选:
-
-- **数据源**: `server`(`docker logs -f xiaozhi-esp32-server`, 含 loguru + httpx + FunASR tqdm 全部输出)
-  与 `runtime`(本运行时唤醒词/音频日志)。
-- **实时优先**: 打开页面即从**当前**开始实时滚动, 只带最近 ~20 行上下文, 不重放历史旧会话。
-- **筛选**: 按 源 / 级别(DEBUG/INFO/WARN/ERROR) / 阶段(VAD/ASR/LLM/TTS/HTTP/MCP/WAKE/SYS)
-  / 关键字 过滤; 支持暂停、清屏、自动滚动(仅贴底时跟随, 空格硬切换)。
-- 每行带 源、级别、阶段 徽标, 按阶段着色(ASR 绿 / ASR RAW 加粗 / LLM 橙 / TTS 紫…)。
-
-实现: `wakeword_runtime/log_streamer.py`(多源广播) + `/logs-ws` 端点 + `main/digital-human/logs.html`。
-
-```bash
-open http://127.0.0.1:8006/logs.html    # 直接浏览器打开
-# 命令行裸测 WS(打印前 5 帧):
-main/digital-human/.venv/bin/python - <<'PY'
-import asyncio, json, websockets
-async def t():
-    async with websockets.connect("ws://127.0.0.1:8006/logs-ws") as ws:
-        for _ in range(5):
-            m = json.loads(await ws.recv())
-            print(m.get("type") or f"[{m.get('source')}/{m.get('level')}] {m.get('line','')[:80]}")
-asyncio.run(t())
-PY
-```
-
-
-
-### 本地低延迟 TTS (已移出本模块)
-
-低延迟 TTS 已独立到 **`my_explorations/local-say-tts/`**, 不再依赖
-digital-human 运行时。机器人链路只需要 `xiaozhi-server` + 该 TTS 服务;
-详见 `my_explorations/local-say-tts/README.md`。
-
-### 要点
-
-- 复用仓库 `main/xiaozhi-server/docker-compose_all.yml`,通过 `--project-directory`
-  把 `data/`、`models/`、`mysql/`、`uploadfile/` 解析到 `deploy/` 目录,不改动仓库文件。
-- 官方镜像 **server_latest / web_latest 已含 arm64 变体**(`Deployment_all.md` 说 x86-only 已过时)。
-- 首次启动引导(被 SM2 加密 + 图形验证码挡住的手动步骤)由 `bootstrap-admin.py` 自动化:
-  从 Redis 直接读验证码明文,用 gmssl(SM2 C1C3C2)加密,注册首个超级管理员,再读取
-  `server.secret` 回填 `deploy/data/.config.yaml`。
-- OTA 归属:全栈模式下 `/xiaozhi/ota/` 由 **manager-api(:8002)** 提供,与数字人页面
-  默认 OTA 地址一致;单服务模式下才是 xiaozhi-server 的 8003。
-- 本地 ASR 依赖 `SenseVoiceSmall/model.pt`(约 1GB,ModelScope 下载),VAD 模型已就位。
-- **语音 AI 仍需用户提供 LLM API Key**(如智谱免费 `glm-4-flash`),在智控台模型配置中填写。
+本目录只负责浏览器模拟器（模拟 ESP32）和本地唤醒词运行时。

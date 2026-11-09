@@ -1,0 +1,3 @@
+# bootstrap-only venv (gmssl); runtime data lives in deploy/ and has its own rules
+.venv/
+__pycache__/

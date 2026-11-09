@@ -21,6 +21,7 @@ import subprocess
 import sys
 import urllib.request
 import uuid
+from pathlib import Path
 
 try:
     from gmssl import sm2, func
@@ -81,7 +82,7 @@ def main():
     ap.add_argument("--username", default="admin")
     ap.add_argument("--password", default="Admin@123456")
     ap.add_argument("--config-file",
-                    default="/Users/wenwu/work/xiaozhi-esp32-server/my_explorations/digital-human/deploy/data/.config.yaml")
+                    default=str(Path(__file__).resolve().parents[1] / "deploy" / "data" / ".config.yaml"))
     ap.add_argument("--set-websocket", default=None,
                     help="把 server.websocket 参数改为该地址 (如 ws://192.168.1.6:8000/xiaozhi/v1/), 然后退出")
     args = ap.parse_args()

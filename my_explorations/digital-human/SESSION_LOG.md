@@ -2,6 +2,9 @@
 
 > 记录实际执行的每一个动作、结果与结论,便于复盘与复现。
 > 日期:2026-11-01。环境:macOS (Apple Silicon), Python 3.13.9。
+>
+> **历史说明:** 2026-11-09 起后端（docker-stack、deploy、bootstrap）已拆分到
+> `my_explorations/server/`。本文保留当时的原始路径记录。
 
 ## 动作记录
 

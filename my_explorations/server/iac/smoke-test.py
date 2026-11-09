@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-smoke-test.py — 端到端冒烟测试 (模拟 digital-human 页面行为)
+smoke-test.py — 端到端冒烟测试 (模拟 ESP32 设备, 与 digital-human 页面同一协议)
 
   1. POST /xiaozhi/ota/ (manager-api :8002)  →  拿到 websocket url + token
   2. 用返回的 URL 建立 WebSocket 连接 (xiaozhi-server :8000)
@@ -25,7 +25,7 @@ def random_mac():
 
 
 def ota_handshake(ota_url, mac):
-    """与 digital-human js/core/network/ota-connector.js 保持一致"""
+    """与 ESP32 OTA 握手 / digital-human ota-connector.js 保持一致"""
     payload = {
         "version": 0, "uuid": "",
         "application": {"name": "xiaozhi-web-test", "version": "1.0.0",

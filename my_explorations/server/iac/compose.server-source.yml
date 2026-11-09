@@ -12,4 +12,4 @@ services:
       # core/ 含 LLM provider(openai.py) 与 connection.py, 是本次调试日志补丁所在
       - ${XIAOZHI_REPO_ROOT}/main/xiaozhi-server/core:/opt/xiaozhi-esp32-server/core
       # 持久化 server.log(容器内 tmp/ = log_dir), 落盘到 deploy/logs/, 容器重建也不丢
-      - ${XIAOZHI_REPO_ROOT}/my_explorations/digital-human/deploy/logs:/opt/xiaozhi-esp32-server/tmp
+      - ${XIAOZHI_REPO_ROOT}/my_explorations/server/deploy/logs:/opt/xiaozhi-esp32-server/tmp

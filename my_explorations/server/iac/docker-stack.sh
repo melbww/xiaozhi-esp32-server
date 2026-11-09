@@ -14,15 +14,17 @@
 #   - 复用仓库自带 docker-compose_all.yml, 通过 --project-directory 将
 #     相对路径 (data/models/mysql/uploadfile) 解析到本目录, 不改动仓库文件。
 #   - 服务器地址/密钥回填到 deploy/data/.config.yaml
+#
+# 这是 Desk Bot 01 的常驻后端; 不依赖 digital-human 运行时。
 # =============================================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 COMPOSE="$ROOT/main/xiaozhi-server/docker-compose_all.yml"
-PROJECT_DIR="$ROOT/my_explorations/digital-human/deploy"
+PROJECT_DIR="$ROOT/my_explorations/server/deploy"
 PROJECT_NAME="xiaozhi"
 # 开发调试覆盖: 将本地 main/xiaozhi-server/core bind-mount 进容器(见该文件头注释)
-SOURCE_OVERRIDE="$ROOT/my_explorations/digital-human/iac/compose.server-source.yml"
+SOURCE_OVERRIDE="$ROOT/my_explorations/server/iac/compose.server-source.yml"
 
 # 供 compose 插值 ${XIAOZHI_REPO_ROOT}(覆盖文件中的相对路径基准)
 export XIAOZHI_REPO_ROOT="$ROOT"
@@ -57,8 +59,12 @@ case "${1:-up}" in
     docker logs --tail=20 xiaozhi-esp32-server
     ;;
   bootstrap)
-    VENV_PY="$ROOT/main/digital-human/.venv/bin/python"
-    [ -x "$VENV_PY" ] || { echo "venv 不存在, 先运行 setup.sh" >&2; exit 1; }
+    # bootstrap 只需要 gmssl; 用 server 自己的 venv, 不再依赖 digital-human 运行时。
+    VENV_PY="$ROOT/my_explorations/server/.venv/bin/python"
+    if [ ! -x "$VENV_PY" ]; then
+      python3 -m venv "$ROOT/my_explorations/server/.venv"
+    fi
+    "$VENV_PY" -c "import gmssl" 2>/dev/null || "$VENV_PY" -m pip install -q gmssl
     # 若 data/.config.yaml 不存在 (全新克隆), 从模板生成 (secret 仍是 PLACEHOLDER, 稍后回填)
     DATA_CFG="$PROJECT_DIR/data/.config.yaml"
     if [ ! -f "$DATA_CFG" ]; then
@@ -66,8 +72,7 @@ case "${1:-up}" in
       cp "$PROJECT_DIR/config.template.yaml" "$DATA_CFG"
       echo "已从模板生成 $DATA_CFG"
     fi
-    "$VENV_PY" -c "import gmssl" 2>/dev/null || "$VENV_PY" -m pip install -q gmssl
-    "$VENV_PY" "$ROOT/my_explorations/digital-human/iac/bootstrap-admin.py" \
+    "$VENV_PY" "$ROOT/my_explorations/server/iac/bootstrap-admin.py" \
       --api "http://127.0.0.1:8002/xiaozhi" \
       --redis-container xiaozhi-esp32-server-redis
     ;;

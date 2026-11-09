@@ -2,9 +2,9 @@
 #
 # 用法:
 #   docker compose --project-name xiaozhi \
-#     --project-directory my_explorations/digital-human/deploy \
+#     --project-directory my_explorations/server/deploy \
 #     -f main/xiaozhi-server/docker-compose_all.yml \
-#     -f my_explorations/digital-human/deploy/docker-compose.mirror.yml \
+#     -f my_explorations/server/deploy/docker-compose.mirror.yml \
 #     up -d
 #
 # 国内可用镜像源 (2026-11 实测均可达):
