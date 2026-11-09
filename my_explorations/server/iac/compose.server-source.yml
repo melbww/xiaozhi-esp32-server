@@ -1,0 +1,15 @@
+# =============================================================================
+# 开发调试覆盖: 把本地 main/xiaozhi-server 源码 bind-mount 进容器
+# 使对 core/(LLM 请求/响应全文日志等)的修改立即生效, 无需重新构建镜像。
+#
+# 由 docker-stack.sh 自动加载 (-f), 需要环境变量 XIAOZHI_REPO_ROOT 指向仓库根。
+# 注意: 容器会实时读取本地源码, 本地若有未提交的坏改动会直接影响容器。
+# 不需要时: 删除本文件, 或从 docker-stack.sh 的 COMPOSE_ARGS 中去掉 -f 本文件。
+# =============================================================================
+services:
+  xiaozhi-esp32-server:
+    volumes:
+      # core/ 含 LLM provider(openai.py) 与 connection.py, 是本次调试日志补丁所在
+      - ${XIAOZHI_REPO_ROOT}/main/xiaozhi-server/core:/opt/xiaozhi-esp32-server/core
+      # 持久化 server.log(容器内 tmp/ = log_dir), 落盘到 deploy/logs/, 容器重建也不丢
+      - ${XIAOZHI_REPO_ROOT}/my_explorations/server/deploy/logs:/opt/xiaozhi-esp32-server/tmp

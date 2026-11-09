@@ -1,0 +1,38 @@
+# =============================================================================
+# digital-human 容器化部署 (可选 IaC)
+#
+# ⚠️ 重要说明:
+#   - 唤醒词检测需要访问主机麦克风, 仅 Linux 宿主机可用 (/dev/snd 透传)。
+#   - macOS Docker Desktop 无法透传麦克风, 请直接使用 ./start.sh 本机运行。
+#   - 若不需要唤醒词 (仅测试页面), 可设置 WAKEWORD_ENABLED=false。
+#
+# 用法 (Linux):
+#   docker compose -f my_explorations/digital-human/iac/docker-compose.yml up -d
+#   页面: http://<host>:8006/index.html   健康检查: http://<host>:8006/health
+# =============================================================================
+services:
+  digital-human:
+    image: python:3.11-slim
+    container_name: digital-human
+    working_dir: /app/wakeword_runtime
+    command: >
+      sh -c "apt-get update -qq && apt-get install -y -qq libportaudio2 libsndfile1 ffmpeg >/dev/null
+      && pip install -q -r requirements.txt
+      && cd /app && python start.py"
+    ports:
+      - "8006:8006"
+    volumes:
+      # 代码 + 模型 (模型由 setup.sh 准备好, 或容器内自行下载)
+      - ../../../main/digital-human:/app
+    environment:
+      # 容器内不支持 CLI 端口覆盖; 如需禁用唤醒词, 覆盖配置挂载即可
+      PYTHONUNBUFFERED: "1"
+    devices:
+      # Linux 主机麦克风透传 (唤醒词必需)
+      - /dev/snd:/dev/snd
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8006/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

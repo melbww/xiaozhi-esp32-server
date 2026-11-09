@@ -1,3 +1,4 @@
+import json
 import httpx
 import openai
 from openai.types import CompletionUsage
@@ -141,9 +142,16 @@ class LLMProvider(LLMProviderBase):
         # 禁用思考模式
         self._apply_thinking_disabled(request_params)
 
+        # 调试: 打印发送给远端 LLM 的完整请求(messages 全文)
+        logger.bind(tag=TAG).info(
+            f"LLM 请求 -> {self.base_url} model={self.model_name} "
+            f"messages={json.dumps(request_params.get('messages', []), ensure_ascii=False, default=str)}"
+        )
+
         responses = self.client.chat.completions.create(**request_params)
 
         is_active = True
+        reply_chunks = []
         try:            
             for chunk in responses:
                 try:
@@ -159,9 +167,12 @@ class LLMProvider(LLMProviderBase):
                         is_active = True
                         content = content.split("</think>")[-1]
                     if is_active:
+                        reply_chunks.append(content)
                         yield content
         finally:
             responses.close()
+            if reply_chunks:
+                logger.bind(tag=TAG).info(f"LLM 响应全文: {''.join(reply_chunks)}")
 
     def response_with_functions(self, session_id, dialogue, functions=None, **kwargs):
         dialogue = self.normalize_dialogue(dialogue)
@@ -187,14 +198,37 @@ class LLMProvider(LLMProviderBase):
         # 禁用思考模式
         self._apply_thinking_disabled(request_params)
 
+        # 调试: 打印发送给远端 LLM 的完整请求(messages/tools)
+        tool_names = []
+        for f in functions or []:
+            if isinstance(f, dict):
+                fn = f.get("function", f)
+                tool_names.append(fn.get("name") or (fn.get("description", "?")[:40] if fn.get("description") else "?"))
+        logger.bind(tag=TAG).info(
+            f"LLM 请求(工具调用) -> {self.base_url} model={self.model_name} "
+            f"tools={json.dumps(tool_names, ensure_ascii=False)} "
+            f"messages={json.dumps(request_params.get('messages', []), ensure_ascii=False, default=str)}"
+        )
+
         stream = self.client.chat.completions.create(**request_params)
 
+        reply_chunks = []
+        tool_calls_log = []
         try:
             for chunk in stream:
                 if getattr(chunk, "choices", None):
                     delta = chunk.choices[0].delta
                     content = getattr(delta, "content", "")
                     tool_calls = getattr(delta, "tool_calls", None)
+                    if content:
+                        reply_chunks.append(content)
+                    if tool_calls:
+                        for tc in tool_calls:
+                            fn = getattr(tc, "function", None)
+                            tool_calls_log.append({
+                                "name": fn.name if fn else None,
+                                "arguments": fn.arguments if fn else "",
+                            })
                     yield content, tool_calls
                 elif isinstance(getattr(chunk, "usage", None), CompletionUsage):
                     usage_info = getattr(chunk, "usage", None)
@@ -205,3 +239,8 @@ class LLMProvider(LLMProviderBase):
                     )
         finally:
             stream.close()
+            if reply_chunks or tool_calls_log:
+                summary = f"LLM 响应全文: {''.join(reply_chunks)}"
+                if tool_calls_log:
+                    summary += f"\nLLM 工具调用: {json.dumps(tool_calls_log, ensure_ascii=False)}"
+                logger.bind(tag=TAG).info(summary)

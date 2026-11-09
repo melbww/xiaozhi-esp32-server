@@ -1,0 +1,11 @@
+# 模板: 首次部署时复制为 deploy/data/.config.yaml 并回填真实 server.secret
+# 命令: docker-stack.sh bootstrap 会自动完成 (若 data/.config.yaml 不存在)
+server:
+  ip: 0.0.0.0
+  port: 8000
+  http_port: 8003
+  vision_explain: http://127.0.0.1:8003/mcp/vision/explain
+manager-api:
+  url: http://xiaozhi-esp32-server-web:8002/xiaozhi
+  secret: PLACEHOLDER
+prompt_template: agent-base-prompt.txt
