@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Live Logs · xiaozhi digital-human</title>
+<title>Live Logs · desk bot stack</title>
 <style>
   :root {
     --bg: #0d1117;
@@ -62,9 +62,8 @@
   .badge-src {
     flex: none; font-size: 10px; padding: 0 6px; border-radius: 3px;
     color: #0d1117; font-weight: 600; min-width: 34px; text-align: center;
+    background: #8b949e;
   }
-  .badge-src.server { background: #58a6ff; }
-  .badge-src.runtime { background: #d2a8ff; }
   .badge-lvl {
     flex: none; font-size: 10px; padding: 0 5px; border-radius: 3px; min-width: 38px;
     text-align: center; border: 1px solid transparent;
@@ -105,8 +104,7 @@
   <div class="sep"></div>
   <div class="group" id="srcGroup">
     <span class="group-label">源</span>
-    <button class="tgl on" data-src="server">server</button>
-    <button class="tgl on" data-src="runtime">runtime</button>
+    <!-- source chips are built from the /logs-ws hello frame (see sources.json) -->
   </div>
   <div class="sep"></div>
   <div class="group" id="lvlGroup">
@@ -152,7 +150,7 @@
 
   const state = {
     ws: null,
-    sources: { server: true, runtime: true },
+    sources: {},
     levels: { debug: true, info: true, warn: true, error: true },
     stages: { ALL: true, VAD: true, ASR: true, LLM: true, TTS: true, HTTP: true, MCP: true, WAKE: true, SYS: true },
     paused: false,
@@ -175,6 +173,31 @@
     return logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight <= SCROLL_TOLERANCE;
   }
 
+  // ---------- 日志源(由服务端 hello 帧动态生成) ----------
+  const SRC_COLORS = ["#58a6ff", "#d2a8ff", "#3fb950", "#ffa657", "#79c0ff", "#f85149"];
+  const srcColor = {};
+
+  function buildSources(list) {
+    const group = document.getElementById("srcGroup");
+    group.querySelectorAll("button[data-src]").forEach((b) => b.remove());
+    Object.keys(state.sources).forEach((k) => delete state.sources[k]);
+
+    (list || []).forEach((item, i) => {
+      const name = typeof item === "string" ? item : item && item.name;
+      if (!name) return;
+      const label = typeof item === "string" ? name : (item.label || name);
+      if (!(name in srcColor)) srcColor[name] = SRC_COLORS[i % SRC_COLORS.length];
+      state.sources[name] = true;
+
+      const btn = document.createElement("button");
+      btn.className = "tgl on";
+      btn.dataset.src = name;
+      btn.textContent = name;
+      btn.title = label + (item.target ? " · " + (item.kind || "") + " " + item.target : "");
+      group.appendChild(btn);
+    });
+  }
+
   // ---------- 阶段识别 ----------
   function classifyStage(line) {
     if (/\[ASR\]\[RAW\]/.test(line)) return "ASRRAW";
@@ -189,8 +212,8 @@
   }
 
   function matches(frame) {
-    if (!state.sources[frame.source]) return false;
-    if (!state.levels[frame.level || "info"]) return false;
+    if (state.sources[frame.source] === false) return false;
+    if (state.levels[frame.level || "info"] === false) return false;
     const stage = classifyStage(frame.line);
     if (!state.stages.ALL && !state.stages[stage]) return false;
     if (state.search && frame.line.indexOf(state.search) === -1) return false;
@@ -226,8 +249,9 @@
     line.className = "line";
 
     const src = document.createElement("span");
-    src.className = "badge-src " + frame.source;
+    src.className = "badge-src";
     src.textContent = frame.source;
+    src.style.background = srcColor[frame.source] || "#8b949e";
 
     const lvl = document.createElement("span");
     lvl.className = "badge-lvl lvl-" + (frame.level || "info");
@@ -306,8 +330,11 @@
         logEl.innerHTML = "";
         state.shown = 0;
         state.total = 0;
+        const payload = msg.payload || {};
+        buildSources(payload.sources);
         document.getElementById("connInfo").textContent =
-          "container=" + (msg.payload && msg.payload.container || "?") + " · history=" + (msg.payload && msg.payload.history || 0);
+          "sources=" + (Object.keys(state.sources).join(", ") || "?") +
+          " · history=" + (payload.history || 0);
         return;
       }
       if (msg.source) enqueue(msg);

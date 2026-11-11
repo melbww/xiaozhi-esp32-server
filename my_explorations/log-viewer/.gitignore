@@ -1,0 +1,3 @@
+*.log
+.log-viewer.pid
+__pycache__/

@@ -6,6 +6,7 @@
 |------|--------|------|------|----------|
 | ESP32 硬件 | 真实设备(麦克风/喇叭/按钮) | C++ 固件 | 客户端 | 实时 |
 | `digital-human` | 浏览器模拟 ESP32 + 本地唤醒词 | Python + JS | 8006(本地) | 实时(模拟) |
+| `log-viewer` | 独立实时日志面板(排障工具) | Python + HTML/JS | 8007(本地) | 开发/运维 |
 | `xiaozhi-server` | 语音 AI 引擎 | Python 3 + asyncio | **8000** WS / **8003** 简单OTA | 实时 |
 | `manager-api` | 管理后端(配置唯一真源) | Java 21 + Spring Boot 3 | **8002** | 控制 |
 | `manager-web` | Web 管理界面 | Vue.js 2 | 8001(经 Nginx) | 控制 |

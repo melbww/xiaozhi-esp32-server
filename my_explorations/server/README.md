@@ -82,6 +82,18 @@ grep -E "LLM 请求|LLM 响应全文|LLM 工具调用|\[VAD\]|\[ASR\]" \
   my_explorations/server/deploy/logs/server.log
 ```
 
+### 图形化实时日志（推荐）
+
+独立面板 [`../log-viewer/`](../log-viewer/README.md)(:8007) 同时聚合两个容器 +
+digital-human 运行时，带阶段过滤(VAD/ASR/LLM/TTS/...)、关键字搜索、断线重连：
+
+```sh
+my_explorations/log-viewer/log-viewer.sh start
+open http://127.0.0.1:8007/logs.html
+```
+
+它只读 `docker logs` 和日志文件，不依赖本目录的容器或 digital-human 是否在跑。
+
 ## 冒烟测试
 
 ```sh
