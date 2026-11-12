@@ -85,7 +85,10 @@ python3 my_explorations/log-viewer/log_viewer.py --list-sources
 - 源过滤（按 `sources.json` 动态生成）、级别过滤（DEBUG/INFO/WARN/ERROR）
 - 阶段过滤：`VAD / ASR / LLM / TTS / HTTP / MCP / WAKE / SYS`（按行内容自动分类）
 - 关键字搜索、暂停、清屏、超长行点击展开
-- `空格` 暂停/恢复自动滚动；往上翻不会被新日志打断
+- 自动跟随：**只在已经滚到底部时**才跟着新日志滚动；往上翻不会被打断，
+  自己滚回底部就恢复跟随
+- `空格` 暂停/恢复自动跟随；不在底部时右下角出现 `⬇ 最新` 按钮，
+  点击立刻回到最新并恢复跟随
 - WebSocket 断线自动重连（2s）
 
 ## HTTP 接口
