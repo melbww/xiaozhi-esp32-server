@@ -89,6 +89,36 @@
   .txt.stage-HTTP { color: #8b949e; }
   .txt.stage-ERROR { color: #f85149; }
   .txt.stage-WARN  { color: #d29922; }
+  .badge-sess {
+    flex: none; font-size: 10px; padding: 0 5px; border-radius: 3px; min-width: 58px;
+    text-align: center; background: #11161d; border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  select {
+    background: #0d1117; border: 1px solid var(--border); color: var(--text);
+    border-radius: 5px; padding: 3px 6px; font-size: 12px; font-family: inherit;
+    max-width: 210px;
+  }
+  select:focus { outline: 1px solid var(--info); }
+  #log.grouped { padding: 8px 10px; }
+  .sess {
+    border: 1px solid var(--border); border-radius: 6px;
+    margin: 0 0 8px; background: #10151c; overflow: hidden;
+  }
+  .sess-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px; cursor: pointer; font-size: 12px;
+    background: #161b22; user-select: none;
+  }
+  .sess-head:hover { background: #1b222b; }
+  .sess.collapsed .sess-body { display: none; }
+  .sess.collapsed .sess-caret { transform: rotate(-90deg); }
+  .sess-caret { color: var(--muted); width: 10px; display: inline-block; }
+  .sess-id { font-weight: 600; }
+  .sess-dev { color: var(--muted); font-size: 11px; }
+  .sess-meta { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .sess-body { padding: 2px 0; border-left: 2px solid rgba(88,166,255,.25); margin-left: 13px; }
+  .sess-body .badge-sess { display: none; }
   #empty { color: var(--muted); text-align: center; padding: 40px; font-size: 12px; }
   /* 用户往上翻(不在底部)时出现的"回到最新"浮层按钮 */
   #jumpBottom {
@@ -135,6 +165,14 @@
     <button class="chip on" data-stage="SYS">SYS</button>
   </div>
   <div class="sep"></div>
+  <div class="group" id="sessGroup">
+    <span class="group-label">会话</span>
+    <select id="sessSelect" title="按 session_id 过滤（分组模式见右侧按钮）">
+      <option value="">全部</option>
+    </select>
+    <button id="groupBtn" title="把同一会话的日志折叠到一起">👥 分组</button>
+  </div>
+  <div class="sep"></div>
   <input type="search" id="search" placeholder="🔍 关键字过滤…">
   <button id="pauseBtn">⏸ 暂停</button>
   <button id="clearBtn">🧹 清屏</button>
@@ -153,7 +191,8 @@
 
   // ---------- 状态 ----------
   const wsUrl = "ws://" + location.host + "/logs-ws";
-  const MAX_LINES = 3000;
+  const MAX_FRAMES = 3000;
+  const TRIM_CHUNK = 500;   // 缓冲满后一次丢这么多再整体重绘, 避免每帧都重绘
   const FLUSH_MS = 80;
 
   const state = {
@@ -161,13 +200,19 @@
     sources: {},
     levels: { debug: true, info: true, warn: true, error: true },
     stages: { ALL: true, VAD: true, ASR: true, LLM: true, TTS: true, HTTP: true, MCP: true, WAKE: true, SYS: true },
+    session: "",          // "" = 全部, "__none__" = 未归属, 否则是 session_id
+    grouped: false,       // 按会话分块显示
     paused: false,
     autoScroll: true,
     search: "",
     total: 0,
     shown: 0,
+    frames: [],           // 已收到的帧(过滤前), 用于切换过滤/分组后重绘
+    sessions: {},         // id -> { id, device, first, last, count }
+    blocks: {},           // session key -> { wrap, body, metaEl, count, first, last }
     pending: [],
     timer: null,
+    recording: null,
   };
 
   const logEl = document.getElementById("log");
@@ -175,6 +220,8 @@
   const statusEl = document.getElementById("statusText");
   const dotEl = document.getElementById("dot");
   const jumpBtn = document.getElementById("jumpBottom");
+  const sessSel = document.getElementById("sessSelect");
+  const groupBtn = document.getElementById("groupBtn");
 
   // 视为"贴底"的容差(px): 在这个范围内就认为用户在看最新内容
   const SCROLL_TOLERANCE = 24;
@@ -214,6 +261,75 @@
     });
   }
 
+  // ---------- 会话 ----------
+  function sessionKey(frame) {
+    return frame.session || "__none__";
+  }
+  function sessionLabel(id) {
+    if (id === "__none__") return "未归属";
+    const compact = String(id).replace(/-/g, "");
+    return "#" + compact.slice(0, 8);
+  }
+  function sessionColor(id) {
+    if (id === "__none__") return "#8b949e";
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+    return "hsl(" + (Math.abs(hash) % 360) + ",65%,65%)";
+  }
+  function fmtTime(ts) {
+    if (!ts) return "";
+    const d = new Date(ts * 1000);
+    return d.toLocaleTimeString("zh-CN", { hour12: false });
+  }
+  // 尽量用日志行自己的时间戳(比"面板收到的时间"更接近真实时刻)
+  function lineTime(line) {
+    let m = /^\d{4}-\d{2}-\d{2}[ T](\d{2}:\d{2}:\d{2})/.exec(line);
+    if (m) return m[1];
+    m = /^\d{6} (\d{2}:\d{2}:\d{2})/.exec(line);
+    if (m) return m[1];
+    return "";
+  }
+
+  function buildSessionOptions(list) {
+    if (list) {
+      state.sessions = {};
+      (list || []).forEach((meta) => {
+        if (meta && meta.id) state.sessions[meta.id] = meta;
+      });
+    }
+    const current = state.session;
+    sessSel.innerHTML = "";
+    sessSel.add(new Option("全部", ""));
+    sessSel.add(new Option("未归属", "__none__"));
+    Object.values(state.sessions)
+      .sort((a, b) => (b.last || 0) - (a.last || 0))
+      .forEach((meta) => {
+        const opt = new Option(sessionLabel(meta.id) + (meta.device ? " · " + meta.device : ""), meta.id);
+        opt.title = meta.id + (meta.device ? " · " + meta.device : "");
+        sessSel.add(opt);
+      });
+    const keep = current === "__none__" || Object.prototype.hasOwnProperty.call(state.sessions, current);
+    sessSel.value = keep ? current : "";
+    state.session = sessSel.value;
+  }
+
+  function noteSession(frame) {
+    if (!frame.session) return;
+    const known = state.sessions[frame.session];
+    if (!known) {
+      state.sessions[frame.session] = {
+        id: frame.session,
+        device: frame.device || "",
+        first: frame.ts,
+        last: frame.ts,
+      };
+      buildSessionOptions();
+      return;
+    }
+    known.last = frame.ts;
+    if (frame.device) known.device = frame.device;
+  }
+
   // ---------- 阶段识别 ----------
   function classifyStage(line) {
     if (/\[ASR\]\[RAW\]/.test(line)) return "ASRRAW";
@@ -233,6 +349,8 @@
     const stage = classifyStage(frame.line);
     if (!state.stages.ALL && !state.stages[stage]) return false;
     if (state.search && frame.line.indexOf(state.search) === -1) return false;
+    if (state.session === "__none__") return !frame.session;
+    if (state.session && frame.session !== state.session) return false;
     return true;
   }
 
@@ -257,6 +375,61 @@
   function truncate(full) {
     if (full.length <= TRUNC_LEN) return { shown: full, truncated: false };
     return { shown: full.slice(0, TRUNC_LEN) + " …(+" + (full.length - TRUNC_LEN) + "字符,点击展开)", truncated: true };
+  }
+
+  // ---------- 会话分块 ----------
+  function blockFor(key) {
+    const existing = state.blocks[key];
+    if (existing) return existing;
+
+    const meta = state.sessions[key] || {};
+    const wrap = document.createElement("section");
+    wrap.className = "sess";
+
+    const head = document.createElement("div");
+    head.className = "sess-head";
+
+    const caret = document.createElement("span");
+    caret.className = "sess-caret";
+    caret.textContent = "▾";
+
+    const idEl = document.createElement("span");
+    idEl.className = "sess-id";
+    idEl.textContent = sessionLabel(key);
+    idEl.style.color = sessionColor(key);
+    if (key !== "__none__") idEl.title = key;
+
+    const devEl = document.createElement("span");
+    devEl.className = "sess-dev";
+    devEl.textContent = meta.device || "";
+
+    const metaEl = document.createElement("span");
+    metaEl.className = "sess-meta";
+
+    head.appendChild(caret);
+    head.appendChild(idEl);
+    head.appendChild(devEl);
+    head.appendChild(metaEl);
+    head.addEventListener("click", () => wrap.classList.toggle("collapsed"));
+
+    const body = document.createElement("div");
+    body.className = "sess-body";
+
+    wrap.appendChild(head);
+    wrap.appendChild(body);
+    logEl.appendChild(wrap);
+
+    const block = { wrap, body, metaEl, count: 0, first: null, last: null };
+    state.blocks[key] = block;
+    return block;
+  }
+
+  function updateBlockMeta(block) {
+    let span = "";
+    if (block.first && block.last) {
+      span = block.first === block.last ? block.first : block.first + " → " + block.last;
+    }
+    block.metaEl.textContent = block.count + " 行" + (span ? " · " + span : "");
   }
 
   function renderFrame(frame) {
@@ -294,30 +467,84 @@
     line.appendChild(src);
     line.appendChild(lvl);
     line.appendChild(st);
-    line.appendChild(txt);
-    logEl.appendChild(line);
 
-    while (logEl.childElementCount > MAX_LINES) {
-      logEl.removeChild(logEl.firstChild);
+    if (frame.session) {
+      const sess = document.createElement("span");
+      sess.className = "badge-sess";
+      sess.textContent = sessionLabel(frame.session);
+      sess.style.color = sessionColor(frame.session);
+      sess.title = frame.session + (frame.device ? " · " + frame.device : "");
+      line.appendChild(sess);
     }
+
+    line.appendChild(txt);
+
+    if (state.grouped) {
+      const block = blockFor(sessionKey(frame));
+      block.body.appendChild(line);
+      block.count++;
+      const t = lineTime(frame.line) || fmtTime(frame.ts);
+      if (block.first == null && t) block.first = t;
+      if (t) block.last = t;
+      updateBlockMeta(block);
+    } else {
+      logEl.appendChild(line);
+    }
+  }
+
+  function updateStats() {
+    statsEl.textContent = "显示 " + state.shown + " / 总数 " + state.total;
+  }
+
+  // 过滤条件/分组模式变化后, 用缓冲帧整体重绘
+  function rerender() {
+    logEl.innerHTML = "";
+    state.blocks = {};
+    state.shown = 0;
+    for (const frame of state.frames) {
+      if (!matches(frame)) continue;
+      state.shown++;
+      renderFrame(frame);
+    }
+    updateStats();
+    updateJumpHint();
   }
 
   function flush() {
     state.timer = null;
     const frames = state.pending;
     state.pending = [];
-    if (state.paused) return;
-    // 关键: 必须在插入新行之前判断"是否贴底" —— 插入后 scrollHeight 会变大,
-    // 此时再判断会永远得到 false, 导致贴底时也不再自动跟随。
-    const follow = state.autoScroll && isAtBottom();
+    if (!frames.length) return;
+
+    const follow = state.autoScroll && !state.paused && isAtBottom();
+
+    let trimmed = false;
     for (const frame of frames) {
       state.total++;
-      if (matches(frame)) {
+      state.frames.push(frame);
+      noteSession(frame);
+    }
+    if (state.frames.length > MAX_FRAMES + TRIM_CHUNK) {
+      state.frames.splice(0, state.frames.length - MAX_FRAMES);
+      trimmed = true;
+    }
+
+    if (state.paused) {
+      updateStats();
+      return;
+    }
+
+    if (trimmed) {
+      rerender();
+    } else {
+      for (const frame of frames) {
+        if (!matches(frame)) continue;
         state.shown++;
         renderFrame(frame);
       }
+      updateStats();
     }
-    statsEl.textContent = "显示 " + state.shown + " / 总数 " + state.total;
+
     // 只在渲染前"已经贴底"时跟到底部; 用户往上翻过则不打扰, 滚回底部后自动恢复
     if (follow) scrollToBottom();
     updateJumpHint();
@@ -333,6 +560,14 @@
     dotEl.classList.toggle("on", !!ok);
   }
 
+  function connInfoText(payload) {
+    const names = Object.keys(state.sources).join(", ") || "?";
+    let text = "sources=" + names + " · history=" + (payload.history || 0);
+    text += " · 会话=" + Object.keys(state.sessions).length;
+    text += " · 录制=" + (state.recording && state.recording.enabled ? "on" : "off");
+    return text;
+  }
+
   // ---------- WebSocket ----------
   function connect() {
     if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) return;
@@ -345,15 +580,26 @@
       let msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
       if (msg.type === "logs_hello") {
-        logEl.innerHTML = "";
-        state.shown = 0;
-        state.total = 0;
-        updateJumpHint();
         const payload = msg.payload || {};
+        state.recording = payload.recording || null;
         buildSources(payload.sources);
-        document.getElementById("connInfo").textContent =
-          "sources=" + (Object.keys(state.sources).join(", ") || "?") +
-          " · history=" + (payload.history || 0);
+        buildSessionOptions(payload.sessions || []);
+        if (wantSession) {
+          state.session = wantSession;
+          sessSel.value = wantSession;
+          if (!sessSel.value) state.session = "";
+          wantSession = "";
+        }
+        state.total = 0;
+        state.shown = 0;
+        state.frames = [];
+        state.pending = [];
+        if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+        logEl.innerHTML = "";
+        state.blocks = {};
+        updateStats();
+        updateJumpHint();
+        document.getElementById("connInfo").textContent = connInfoText(payload);
         return;
       }
       if (msg.source) enqueue(msg);
@@ -371,6 +617,7 @@
     if (!btn) return;
     state.sources[btn.dataset.src] = !state.sources[btn.dataset.src];
     btn.classList.toggle("on", state.sources[btn.dataset.src]);
+    rerender();
   });
 
   document.getElementById("lvlGroup").addEventListener("click", (e) => {
@@ -378,6 +625,7 @@
     if (!btn) return;
     state.levels[btn.dataset.lvl] = !state.levels[btn.dataset.lvl];
     btn.classList.toggle("on", state.levels[btn.dataset.lvl]);
+    rerender();
   });
 
   document.getElementById("stageGroup").addEventListener("click", (e) => {
@@ -391,40 +639,52 @@
       document.querySelectorAll("#stageGroup .chip[data-stage]").forEach((b) => {
         if (b.dataset.stage !== "ALL") { state.stages[b.dataset.stage] = next; b.classList.toggle("on", next); }
       });
-      return;
+    } else {
+      state.stages[s] = !state.stages[s];
+      btn.classList.toggle("on", state.stages[s]);
+      const allOn = Object.keys(state.stages).filter((k) => k !== "ALL").every((k) => state.stages[k]);
+      state.stages.ALL = allOn;
+      document.querySelector('#stageGroup .chip[data-stage="ALL"]').classList.toggle("on", allOn);
     }
-    state.stages[s] = !state.stages[s];
-    btn.classList.toggle("on", state.stages[s]);
-    const allOn = Object.keys(state.stages).filter((k) => k !== "ALL").every((k) => state.stages[k]);
-    state.stages.ALL = allOn;
-    document.querySelector('#stageGroup .chip[data-stage="ALL"]').classList.toggle("on", allOn);
+    rerender();
+  });
+
+  sessSel.addEventListener("change", () => {
+    state.session = sessSel.value;
+    rerender();
+  });
+
+  groupBtn.addEventListener("click", () => {
+    state.grouped = !state.grouped;
+    groupBtn.classList.toggle("on", state.grouped);
+    logEl.classList.toggle("grouped", state.grouped);
+    rerender();
   });
 
   const searchEl = document.getElementById("search");
+  let searchTimer = null;
   searchEl.addEventListener("input", () => {
     state.search = searchEl.value.trim();
-    logEl.innerHTML = "";
-    state.shown = 0;
-    statsEl.textContent = "显示 0 / 总数 " + state.total;
-    updateJumpHint();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(rerender, 150);
   });
 
   document.getElementById("pauseBtn").addEventListener("click", (e) => {
     state.paused = !state.paused;
     e.target.textContent = state.paused ? "▶ 继续" : "⏸ 暂停";
     e.target.classList.toggle("on", state.paused);
-    if (!state.paused) flush();
+    if (!state.paused) rerender();
   });
 
   document.getElementById("clearBtn").addEventListener("click", () => {
-    logEl.innerHTML = "";
-    state.shown = 0;
-    updateJumpHint();
+    state.frames = [];
+    state.total = 0;
+    rerender();
   });
 
   // 空格暂停/恢复自动滚动
   document.addEventListener("keydown", (e) => {
-    if (e.target.tagName === "INPUT") return;
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
     if (e.code === "Space") {
       e.preventDefault();
       state.autoScroll = !state.autoScroll;
@@ -442,8 +702,18 @@
     updateJumpHint();
   });
 
+  // 支持直接打开 #group 进入会话分组视图, #session=<id> 直达某个会话
+  const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
+  let wantSession = hashParams.get("session") || "";
+  if (hashParams.has("group") || location.hash.indexOf("group") !== -1) {
+    state.grouped = true;
+    groupBtn.classList.add("on");
+    logEl.classList.add("grouped");
+  }
+
   connect();
 })();
+
 </script>
 </body>
 </html>
