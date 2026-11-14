@@ -144,7 +144,7 @@ python3 my_explorations/log-viewer/log_viewer.py --list-sources
 
 - 源过滤（按 `sources.json` 动态生成）、级别过滤（DEBUG/INFO/WARN/ERROR）
 - 阶段过滤：`VAD / ASR / LLM / TTS / HTTP / MCP / WAKE / SYS`（按行内容自动分类）
-- **会话过滤**：`全部 / 未归属 / #<session_id>`，下拉里带设备 MAC
+- **会话过滤**：`全部 / 未归属 / #<session_id>`，下拉里带会话**开始时间**（`MM-DD HH:MM:SS`）和设备 MAC
 - **会话分组**：同一会话的行折叠成一块，块头显示行数、时间范围、设备；点块头折叠/展开
 - 关键字搜索、暂停、清屏、超长行点击展开
 - 自动跟随：**只在已经滚到底部时**才跟着新日志滚动；往上翻不会被打断，

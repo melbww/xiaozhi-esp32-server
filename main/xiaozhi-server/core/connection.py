@@ -1485,22 +1485,67 @@ class ConnectionHandler:
             ]
             self.dialogue.put(Message(role="assistant", tool_calls=all_tool_calls))
 
+            image_parts = []
             for result, tool_call_data in need_llm_tools:
                 text = result.result
-                if text is not None and len(text) > 0:
+                images = getattr(result, "images", None) or []
+                tool_call_id = (
+                    str(uuid.uuid4())
+                    if tool_call_data["id"] is None
+                    else tool_call_data["id"]
+                )
+                if images:
+                    # Tool messages are text-only; attach the photo in the user
+                    # message below so a multimodal main model can see it.
                     self.dialogue.put(
                         Message(
                             role="tool",
-                            tool_call_id=(
-                                str(uuid.uuid4())
-                                if tool_call_data["id"] is None
-                                else tool_call_data["id"]
-                            ),
+                            tool_call_id=tool_call_id,
+                            content=text
+                            or "Photo captured; see the attached image.",
+                        )
+                    )
+                    image_parts.extend(images)
+                elif text is not None and len(text) > 0:
+                    self.dialogue.put(
+                        Message(
+                            role="tool",
+                            tool_call_id=tool_call_id,
                             content=text,
                         )
                     )
 
-            self.chat(None, depth=depth + 1)
+            image_message = None
+            if image_parts:
+                content = [
+                    {
+                        "type": "text",
+                        "text": (
+                            "The photo you requested is attached. Use it to answer "
+                            "the user or decide the next action."
+                        ),
+                    }
+                ]
+                for image in image_parts:
+                    mime = image.get("mimeType") or "image/jpeg"
+                    data = image.get("data") or ""
+                    content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime};base64,{data}"
+                            },
+                        }
+                    )
+                image_message = Message(role="user", content=content)
+                self.dialogue.put(image_message)
+
+            try:
+                self.chat(None, depth=depth + 1)
+            finally:
+                # Do not re-send a ~70 KB base64 image on every later turn.
+                if image_message is not None:
+                    image_message.content = "[photo]"
 
     def _report_worker(self):
         """聊天记录上报工作线程"""

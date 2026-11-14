@@ -97,7 +97,7 @@
   select {
     background: #0d1117; border: 1px solid var(--border); color: var(--text);
     border-radius: 5px; padding: 3px 6px; font-size: 12px; font-family: inherit;
-    max-width: 210px;
+    max-width: 330px;
   }
   select:focus { outline: 1px solid var(--info); }
   #log.grouped { padding: 8px 10px; }
@@ -167,7 +167,7 @@
   <div class="sep"></div>
   <div class="group" id="sessGroup">
     <span class="group-label">会话</span>
-    <select id="sessSelect" title="按 session_id 过滤（分组模式见右侧按钮）">
+    <select id="sessSelect" title="按 session_id 过滤（显示会话开始时间；分组模式见右侧按钮）">
       <option value="">全部</option>
     </select>
     <button id="groupBtn" title="把同一会话的日志折叠到一起">👥 分组</button>
@@ -281,6 +281,14 @@
     const d = new Date(ts * 1000);
     return d.toLocaleTimeString("zh-CN", { hour12: false });
   }
+  // 会话启动时间用 "MM-DD HH:MM:SS"，跨天也能分清
+  function fmtStart(ts) {
+    if (!ts) return "";
+    const d = new Date(ts * 1000);
+    const p = (n) => String(n).padStart(2, "0");
+    return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " +
+      p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+  }
   // 尽量用日志行自己的时间戳(比"面板收到的时间"更接近真实时刻)
   function lineTime(line) {
     let m = /^\d{4}-\d{2}-\d{2}[ T](\d{2}:\d{2}:\d{2})/.exec(line);
@@ -304,8 +312,17 @@
     Object.values(state.sessions)
       .sort((a, b) => (b.last || 0) - (a.last || 0))
       .forEach((meta) => {
-        const opt = new Option(sessionLabel(meta.id) + (meta.device ? " · " + meta.device : ""), meta.id);
-        opt.title = meta.id + (meta.device ? " · " + meta.device : "");
+        const start = fmtStart(meta.first);
+        const opt = new Option(
+          sessionLabel(meta.id) +
+            (start ? " · " + start : "") +
+            (meta.device ? " · " + meta.device : ""),
+          meta.id
+        );
+        opt.title = meta.id +
+          (start ? " · 开始 " + start : "") +
+          (meta.last ? " · 最后 " + fmtStart(meta.last) : "") +
+          (meta.device ? " · " + meta.device : "");
         sessSel.add(opt);
       });
     const keep = current === "__none__" || Object.prototype.hasOwnProperty.call(state.sessions, current);

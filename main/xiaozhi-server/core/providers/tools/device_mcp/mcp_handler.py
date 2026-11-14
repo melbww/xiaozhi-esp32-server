@@ -209,9 +209,13 @@ async def call_mcp_tool(
     tool_name: str,
     args: str = "{}",
     timeout: int = 30,
+    return_content: bool = False,
 ):
     """
-    调用指定的工具，并等待响应
+    调用指定的工具，并等待响应。
+
+    return_content=True preserves the raw MCP content list, which may contain
+    image parts. The default keeps the historical text-only return value.
     """
     if not await mcp_client.is_ready():
         raise RuntimeError("MCP客户端尚未准备就绪")
@@ -300,6 +304,9 @@ async def call_mcp_tool(
 
             content = raw_result.get("content")
             if isinstance(content, list) and len(content) > 0:
+                if return_content:
+                    # Keep image parts; the caller turns them into LLM messages.
+                    return content
                 if isinstance(content[0], dict) and "text" in content[0]:
                     # 直接返回文本内容，不进行JSON解析
                     return content[0]["text"]
