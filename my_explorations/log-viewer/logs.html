@@ -76,11 +76,54 @@
     flex: none; font-size: 10px; padding: 0 5px; border-radius: 3px; min-width: 34px;
     text-align: center; background: #21262d; color: var(--muted);
   }
+  .badge-time {
+    flex: none; font-size: 10px; min-width: 54px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .line.formatted { align-items: flex-start; }
+  .line.formatted .badge-src, .line.formatted .badge-lvl,
+  .line.formatted .badge-stage, .line.formatted .badge-time,
+  .line.formatted .badge-sess { margin-top: 1px; }
   .txt { flex: 1; min-width: 0; }
   .txt.trunc { cursor: pointer; }
   .txt.trunc:hover { outline: 1px dashed var(--muted); }
   .txt.trunc.expanded { background: rgba(88,166,255,.06); }
   .txt .hl { background: #d29922; color: #0d1117; border-radius: 2px; padding: 0 1px; }
+  details.fmt { margin: 1px 0; }
+  details.fmt > summary {
+    cursor: pointer; color: var(--text); list-style: none;
+  }
+  details.fmt > summary::-webkit-details-marker { display: none; }
+  details.fmt > summary::before {
+    content: "▸"; display: inline-block; width: 12px; color: var(--muted);
+  }
+  details.fmt[open] > summary::before { content: "▾"; }
+  details.fmt > summary:hover { color: var(--info); }
+  .fmt-head { font-weight: 600; }
+  .fmt-meta { color: var(--muted); font-size: 11px; margin-left: 6px; }
+  .fmt-body { margin: 6px 0 2px 12px; }
+  .fmt-info { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+  .fmt-info .k { color: #79c0ff; margin-right: 2px; }
+  .msgs { display: flex; flex-direction: column; gap: 6px; }
+  .msg { border-left: 2px solid var(--border); padding-left: 8px; }
+  .msg.system { border-color: #8b949e; }
+  .msg.user { border-color: #58a6ff; }
+  .msg.assistant { border-color: #d2a8ff; }
+  .msg.tool { border-color: #3fb950; }
+  .msg .role {
+    display: block; font-size: 10px; text-transform: uppercase; color: var(--muted);
+    letter-spacing: .04em; margin-bottom: 1px;
+  }
+  .msg .content, pre.json {
+    margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere;
+    font-family: inherit; font-size: 12px; line-height: 1.45;
+  }
+  pre.json {
+    background: #0d1117; border: 1px solid var(--border); border-radius: 5px;
+    padding: 7px 9px; max-height: 360px; overflow: auto;
+  }
+  details.msg.system { border-left-color: #8b949e; }
+  details.msg.system > summary { cursor: pointer; color: var(--muted); font-size: 11px; }
   .line-photo { flex: none; display: inline-flex; align-self: center; margin-right: 8px; }
   .log-photo {
     /* Fixed 16:9 box: the browser reserves the space before the JPEG loads,
@@ -302,13 +345,242 @@
     return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " +
       p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
   }
-  // 尽量用日志行自己的时间戳(比"面板收到的时间"更接近真实时刻)
-  function lineTime(line) {
-    let m = /^\d{4}-\d{2}-\d{2}[ T](\d{2}:\d{2}:\d{2})/.exec(line);
-    if (m) return m[1];
-    m = /^\d{6} (\d{2}:\d{2}:\d{2})/.exec(line);
-    if (m) return m[1];
-    return "";
+  // ---------- 日志行解析 / 格式化 ----------
+  // loguru 控制台:  261114 17:20:36[0.9.8-...][logger]-INFO-message
+  // loguru 文件:    2026-11-14 17:20:36 - 0.9.8-... - logger - INFO - message
+  // 页面已经用 badge 显示时间/级别/阶段, 正文里不再重复这一长串前缀。
+  const CONSOLE_PREFIX = /^(\d{6} \d{2}:\d{2}:\d{2})\[([^\]]*)\]\[([^\]]*)\]-([A-Z]+)-(.*)$/s;
+  const FILE_PREFIX = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) - ([^-]+) - ([^-]+) - ([A-Z]+) - (.*)$/s;
+  // Java (manager-api): 2026-11-14 00:00:13.954 [thread] DEBUG logger - message
+  const JAVA_PREFIX = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[([^\]]+)\] ([A-Z]+) ([^ ]+) - (.*)$/s;
+  // Python runtime: 2026-11-01 17:23:41,665 [INFO] logger - message
+  const RUNTIME_PREFIX = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) \[([A-Z]+)\] ([^ ]+) - (.*)$/s;
+  // Raw Python logging that bypasses loguru: 2026-11-14 16:50:15,926 [INFO] message
+  const PY_LOG_PREFIX = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) \[([A-Z]+)\] (.*)$/s;
+  function parseLine(full) {
+    let m = CONSOLE_PREFIX.exec(full);
+    if (m) return { time: m[1].slice(-8), level: m[4].toLowerCase(), logger: m[3], message: m[5] };
+    m = FILE_PREFIX.exec(full);
+    if (m) return { time: m[1].slice(11), level: m[4].toLowerCase(), logger: m[3], message: m[5] };
+    m = JAVA_PREFIX.exec(full);
+    if (m) return { time: m[1].slice(11), level: m[3].toLowerCase(), logger: m[4], message: m[5] };
+    m = RUNTIME_PREFIX.exec(full);
+    if (m) return { time: m[1].slice(11), level: m[2].toLowerCase(), logger: m[3], message: m[4] };
+    m = PY_LOG_PREFIX.exec(full);
+    if (m) return { time: m[1].slice(11), level: m[2].toLowerCase(), logger: "", message: m[3] };
+    return { time: "", level: "", logger: "", message: full };
+  }
+  function parsedOf(frame) {
+    if (!frame._parsed) frame._parsed = parseLine(frame.line || "");
+    return frame._parsed;
+  }
+  function oneLine(text, limit) {
+    const s = String(text || "").replace(/\s+/g, " ").trim();
+    return s.length > limit ? s.slice(0, limit - 1) + "…" : s;
+  }
+
+  // 找到从 start 开始的平衡 JSON 值(字符串/转义感知), 返回结束下标。
+  function jsonEnd(text, start) {
+    const open = text[start];
+    const close = open === "{" ? "}" : "]";
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (let i = start; i < text.length; i++) {
+      const c = text[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') { inStr = true; continue; }
+      if (c === open) depth++;
+      else if (c === close) {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+  // 只格式化"一直延伸到行尾"的 JSON, 避免把正文里的 [VAD] 之类误判成 JSON。
+  function trailingJson(text) {
+    const trimmed = text.replace(/\s+$/, "");
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+      if (ch !== "{" && ch !== "[") continue;
+      const end = jsonEnd(trimmed, i);
+      if (end !== trimmed.length - 1) continue;
+      try {
+        return { start: i, value: JSON.parse(trimmed.slice(i, end + 1)) };
+      } catch (error) {}
+    }
+    return null;
+  }
+  function jsonDetail(value, text) {
+    const lines = text.split("\n").length;
+    if (Array.isArray(value)) return value.length + " 项 · " + lines + " 行";
+    if (value && typeof value === "object") {
+      return Object.keys(value).length + " 个键 · " + lines + " 行";
+    }
+    return lines + " 行";
+  }
+
+  // Python 纯字符串列表 ['a', 'b']（不 eval，只认单引号字符串）。
+  function trailingPyList(text) {
+    const trimmed = text.replace(/\s+$/, "");
+    const start = trimmed.lastIndexOf("[");
+    if (start === -1 || !trimmed.endsWith("]")) return null;
+    const inner = trimmed.slice(start + 1, -1);
+    if (inner.trim() !== "" &&
+        !/^\s*(?:'[^']*'\s*,\s*)*'[^']*'\s*$/.test(inner)) {
+      return null;
+    }
+    const items = [];
+    const re = /'([^']*)'/g;
+    let m;
+    while ((m = re.exec(inner))) items.push(m[1]);
+    return { start, value: items };
+  }
+
+  function contentText(content) {
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content
+        .map((part) => {
+          if (typeof part === "string") return part;
+          if (!part) return "";
+          if (typeof part.text === "string") return part.text;
+          if (part.type) return "[" + part.type + "]";
+          return "";
+        })
+        .filter(Boolean)
+        .join("\n");
+    }
+    if (content == null) return "";
+    return JSON.stringify(content);
+  }
+
+  function buildLlmBody(messages, tools, model, url) {
+    let html = '<div class="fmt-info">';
+    if (model) html += '<span class="k">model</span> ' + esc(model) + " ";
+    if (url) html += '<span class="k">endpoint</span> ' + esc(url) + " ";
+    if (tools.length) {
+      html += '<span class="k">tools</span> ' + tools.map((t) => esc(t)).join("、");
+    }
+    html += '</div><div class="msgs">';
+    for (const msg of messages) {
+      const role = String((msg && msg.role) || "?").toLowerCase();
+      const content = contentText(msg && msg.content);
+      const extra = Array.isArray(msg && msg.content)
+        ? msg.content.filter((part) => part && typeof part.text !== "string")
+        : [];
+      if (role === "system" && content) {
+        html += '<details class="msg system"><summary>system · ' +
+          content.length + ' 字符</summary><pre class="content">' +
+          buildHtml(content) + '</pre></details>';
+        continue;
+      }
+      html += '<div class="msg ' + esc(role) + '"><span class="role">' +
+        esc(role) + '</span><pre class="content">' +
+        (content ? buildHtml(content) : "(empty)") + '</pre>';
+      if (extra.length) {
+        html += '<pre class="json">' +
+          buildHtml(JSON.stringify(extra, null, 2)) + '</pre>';
+      }
+      if (msg && msg.tool_calls) {
+        html += '<pre class="json">' +
+          buildHtml(JSON.stringify(msg.tool_calls, null, 2)) + '</pre>';
+      }
+      html += '</div>';
+    }
+    return html + '</div>';
+  }
+
+  function formatLlmRequest(message) {
+    const marker = "messages=";
+    const markerAt = message.indexOf(marker);
+    if (markerAt === -1) return null;
+    const parsed = trailingJson(message.slice(markerAt + marker.length));
+    if (!parsed || !Array.isArray(parsed.value)) return null;
+
+    const messages = parsed.value;
+    const before = message.slice(0, markerAt).replace(/\s+$/, "");
+    let tools = [];
+    const toolMatch = /tools=(\[[^\]]*\])/.exec(before);
+    if (toolMatch) {
+      try { tools = JSON.parse(toolMatch[1]); } catch (error) {}
+    }
+    const modelMatch = /\bmodel=([^\s]+)/.exec(before);
+    const model = modelMatch ? modelMatch[1] : "";
+    const urlMatch = /->\s*(\S+)/.exec(before);
+    const url = urlMatch ? urlMatch[1] : "";
+
+    let head = before;
+    const cut = head.search(/\s+model=|\s+tools=/);
+    if (cut !== -1) head = head.slice(0, cut);
+    head = head.replace(/\s*->\s*\S+$/, "").trim();
+
+    let lastUser = "";
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg && msg.role === "user" && msg.content) {
+        lastUser = contentText(msg.content);
+        break;
+      }
+    }
+    const meta = [];
+    if (model) meta.push("model: " + model);
+    if (tools.length) {
+      const shown = tools.slice(0, 3).join(", ");
+      meta.push("tools: " + shown + (tools.length > 3 ? " … (" + tools.length + ")" : ""));
+    }
+    meta.push(messages.length + " 条消息");
+    if (lastUser) meta.push("user: " + oneLine(lastUser, 50));
+
+    return {
+      summary: '<span class="fmt-head">' + esc(oneLine(head || "LLM 请求", 80)) + '</span>' +
+        '<span class="fmt-meta"> · ' + esc(meta.join(" · ")) + '</span>',
+      full: () => buildLlmBody(messages, tools, model, url),
+    };
+  }
+
+  function formatGenericJson(message) {
+    const parsed = trailingJson(message) || trailingPyList(message);
+    if (!parsed) return null;
+    const text = JSON.stringify(parsed.value, null, 2);
+    const before = message.slice(0, parsed.start).replace(/\s+$/, "");
+    const label = before.replace(/\s*[:：]\s*$/, "");
+    return {
+      summary: '<span class="fmt-head">' + esc(label ? oneLine(label, 160) : "JSON") +
+        '</span><span class="fmt-meta"> · ' + esc(jsonDetail(parsed.value, text)) + '</span>',
+      full: () => '<pre class="json">' + buildHtml(text) + '</pre>',
+    };
+  }
+
+  function formatFrameMessage(message) {
+    if (!message) return null;
+    if (message.indexOf("messages=") !== -1) {
+      const llm = formatLlmRequest(message);
+      if (llm) return llm;
+    }
+    const response = /^(LLM 响应(?:全文)?)[:：]\s*([\s\S]*)$/.exec(message);
+    if (response) {
+      const content = response[2];
+      return {
+        summary: '<span class="fmt-head">' + esc(response[1]) +
+          '</span><span class="fmt-meta"> · ' + content.length + ' 字符</span>',
+        full: () => '<pre class="content">' + buildHtml(content) + '</pre>',
+      };
+    }
+    return formatGenericJson(message);
+  }
+
+  function formattedOf(frame, message) {
+    if (frame._formatted === undefined) {
+      frame._formatted = formatFrameMessage(message) || null;
+    }
+    return frame._formatted;
   }
 
   function buildSessionOptions(list) {
@@ -478,9 +750,11 @@
   function matches(frame) {
     if (state.sources[frame.source] === false) return false;
     if (state.levels[frame.level || "info"] === false) return false;
-    const stage = classifyStage(frame.line);
+    const parsed = parsedOf(frame);
+    const text = parsed.message || frame.line;
+    const stage = classifyStage(text);
     if (!state.stages.ALL && !state.stages[stage]) return false;
-    if (state.search && frame.line.indexOf(state.search) === -1) return false;
+    if (state.search && text.indexOf(state.search) === -1) return false;
     if (state.session === "__none__") return !frame.session;
     if (state.session && frame.session !== state.session) return false;
     return true;
@@ -565,7 +839,10 @@
   }
 
   function renderFrame(frame) {
-    const stage = classifyStage(frame.line);
+    const parsed = parsedOf(frame);
+    const message = parsed.message || frame.line;
+    const stage = classifyStage(message);
+    const level = frame.level || parsed.level || "info";
     const line = document.createElement("div");
     line.className = "line";
 
@@ -579,25 +856,51 @@
     src.style.background = srcColor[frame.source] || "#8b949e";
 
     const lvl = document.createElement("span");
-    lvl.className = "badge-lvl lvl-" + (frame.level || "info");
-    lvl.textContent = (frame.level || "info").toUpperCase();
+    lvl.className = "badge-lvl lvl-" + level;
+    lvl.textContent = level.toUpperCase();
 
     const st = document.createElement("span");
     st.className = "badge-stage";
     st.textContent = stage;
 
-    const txt = document.createElement("span");
+    const timeText = parsed.time || fmtTime(frame.ts);
+    let timeEl = null;
+    if (timeText) {
+      timeEl = document.createElement("span");
+      timeEl.className = "badge-time";
+      timeEl.textContent = timeText;
+      if (frame.ts) {
+        timeEl.title = new Date(frame.ts * 1000).toLocaleString("zh-CN", { hour12: false });
+      }
+    }
+
+    const txt = document.createElement("div");
     txt.className = "txt stage-" + stage;
-    const full = frame.line;
-    const { shown, truncated } = truncate(full);
-    txt.innerHTML = buildHtml(shown);
-    if (truncated) {
-      txt.title = "点击展开/收起完整内容";
-      txt.classList.add("trunc");
-      txt.addEventListener("click", () => {
-        const expanded = txt.classList.toggle("expanded");
-        txt.innerHTML = buildHtml(expanded ? full : shown);
-      });
+    const formatted = formattedOf(frame, message);
+    if (formatted) {
+      line.classList.add("formatted");
+      txt.innerHTML = '<details class="fmt"><summary>' + formatted.summary +
+        '</summary><div class="fmt-body"></div></details>';
+      const details = txt.querySelector("details");
+      if (details) {
+        details.addEventListener("toggle", () => {
+          if (!details.open || details.dataset.built) return;
+          details.dataset.built = "1";
+          const body = details.querySelector(".fmt-body");
+          if (body) body.innerHTML = formatted.full();
+        });
+      }
+    } else {
+      const { shown, truncated } = truncate(message);
+      txt.innerHTML = buildHtml(shown);
+      if (truncated) {
+        txt.title = "点击展开/收起完整内容";
+        txt.classList.add("trunc");
+        txt.addEventListener("click", () => {
+          const expanded = txt.classList.toggle("expanded");
+          txt.innerHTML = buildHtml(expanded ? message : shown);
+        });
+      }
     }
 
     if (frame.photo) {
@@ -624,6 +927,7 @@
     line.appendChild(src);
     line.appendChild(lvl);
     line.appendChild(st);
+    if (timeEl) line.appendChild(timeEl);
 
     if (frame.session) {
       const sess = document.createElement("span");
@@ -640,7 +944,7 @@
       const block = blockFor(sessionKey(frame));
       block.body.appendChild(line);
       block.count++;
-      const t = lineTime(frame.line) || fmtTime(frame.ts);
+      const t = parsed.time || fmtTime(frame.ts);
       if (block.first == null && t) block.first = t;
       if (t) block.last = t;
       updateBlockMeta(block);

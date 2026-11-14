@@ -149,6 +149,7 @@ python3 my_explorations/log-viewer/log_viewer.py --list-sources
   - 选中一个不在当前页面缓冲区里的历史会话时，会按需从 `/api/recordings/...` 加载它的帧（不会一次性把全部录制塞进页面）
 - **会话分组**：同一会话的行折叠成一块，块头显示行数、时间范围、设备；点块头折叠/展开
 - 关键字搜索、暂停、清屏、超长行点击展开
+- **日志行格式化**：自动去掉 loguru / Java / 原生 Python logging / runtime 的时间-级别-logger 前缀（时间和级别已由左侧 badge 显示）；`LLM 请求 ... messages=[...]` 按 role 折叠展示，超长 system prompt 默认收起；行尾的 JSON / Python 字符串列表自动 pretty-print，点开 `<details>` 才展开（避免一次性把长 prompt 塞进 DOM）
 - **拍照缩略图**：`PHOTO /photos/...` 行**左侧**显示原图缩略图，点击在新标签打开原图；缩略图固定 176×99（16:9），图片加载不会改变行高，不会打断自动滚动
 - 自动跟随：**只在已经滚到底部时**才跟着新日志滚动；往上翻不会被打断，
   自己滚回底部就恢复跟随
