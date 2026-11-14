@@ -82,6 +82,30 @@ grep -E "LLM 请求|LLM 响应全文|LLM 工具调用|\[VAD\]|\[ASR\]" \
   my_explorations/server/deploy/logs/server.log
 ```
 
+### 工具调用 few-shot
+
+每次 WebSocket 连接初始化时，`core/connection.py` 会注入两条临时 few-shot
+（用户消息带 `[示例]` 前缀）：
+
+- `[示例] 谢谢` → `direct_answer`：教模型把直接回复写进 `response` 参数；
+- `[示例] 拜拜` → `handle_exit_intent`：教模型完整的“调用→结果→回复”闭环。
+
+它们只是格式示范，`is_temporary=True`，不会进入长期记忆，也不代表用户真的说过
+这些话；system prompt 会通过 `<tool_example_rules>` 明确告诉模型：示例不是
+真实对话、不是记忆，不要提及、延续或引用。日志里看到它们属于正常现象，不是
+上下文串线。
+
+> 旧版本用“给我讲个故事吧 → 选一个我给你开讲”作为 direct_answer 示例，
+> 弱模型会把它当成真实历史，在新会话里回答“刚才说要给你讲故事”。现已替换为
+> 无待办承诺的“谢谢”，并把 direct_answer 放在示例末尾。
+
+### 首条消息与初始化
+
+连接建立后，`_initialize_components()` 在线程池里构建增强 prompt 和 few-shot；
+`startToChat()` 会等待 `components_ready_event`（最多 10 秒）再进入 LLM。
+因此首条消息不会只带 `You are ESP, a desktop bot` 的 quick prompt 回复。
+如果日志出现“组件初始化超时”，说明初始化异常并已降级放行。
+
 ### 图形化实时日志（推荐）
 
 独立面板 [`../log-viewer/`](../log-viewer/README.md)(:8007) 同时聚合两个容器 +
