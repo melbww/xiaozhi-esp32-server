@@ -195,12 +195,17 @@ class UnifiedToolHandler:
         # 合并所有成功的响应
         contents = []
         responses_text = []
+        images = []
 
         for response in responses:
-            if response.content:
-                contents.append(response.content)
+            content = getattr(response, "content", None)
+            if not content and response.action == Action.REQLLM:
+                content = response.result
+            if content:
+                contents.append(content)
             if response.response:
                 responses_text.append(response.response)
+            images.extend(getattr(response, "images", None) or [])
 
         # 确定最终的动作类型
         final_action = Action.RESPONSE
@@ -208,12 +213,17 @@ class UnifiedToolHandler:
             if response.action == Action.REQLLM:
                 final_action = Action.REQLLM
                 break
+        if images:
+            final_action = Action.REQLLM
 
-        return ActionResponse(
+        combined = ActionResponse(
             action=final_action,
             result="; ".join(contents) if contents else None,
             response="; ".join(responses_text) if responses_text else None,
         )
+        if images:
+            combined.images = images
+        return combined
 
     async def register_iot_tools(self, descriptors: List[Dict[str, Any]]):
         """注册IoT设备工具"""

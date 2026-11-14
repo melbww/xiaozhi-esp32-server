@@ -30,7 +30,11 @@ from core.utils.modules_initialize import (
 from core.handle.reportHandle import report, enqueue_tool_report
 from core.providers.tts.default import DefaultTTS
 from concurrent.futures import ThreadPoolExecutor
-from core.utils.dialogue import Message, Dialogue
+from core.utils.dialogue import (
+    Message,
+    Dialogue,
+    build_tool_call_fewshot_messages,
+)
 from core.providers.asr.dto.dto import InterfaceType
 from core.handle.textHandle import handleTextMessage
 from core.providers.tools.unified_tool_handler import UnifiedToolHandler
@@ -54,6 +58,19 @@ auto_import_modules("plugins_func.functions")
 
 class TTSException(RuntimeError):
     pass
+
+# 附加到 system prompt，说明 few-shot 只是格式示例，不是真实对话。
+# 运行时追加而不是写死在 agent-base-prompt.txt，这样自定义 prompt_template
+# 以及只 bind-mount core/ 的部署也能生效。
+TOOL_EXAMPLE_NOTE = (
+    "\n\n<tool_example_rules>\n"
+    "对话历史中以“[示例]”开头的回合只是工具调用格式示范，不是真实对话，"
+    "也不是你的记忆，不代表用户真的说过这些话。\n"
+    "绝对不要提及、延续或引用它们，也不要把它们当成已发生的事实、承诺，"
+    "或你曾经说过的话。\n"
+    "真实对话只从最后一条不带“[示例]”的用户消息开始；只回答这条消息。\n"
+    "</tool_example_rules>"
+)
 
 # direct_answer 虚拟工具定义
 # 不是真实工具，是路由机制：将"调不调工具"的二选一变为"调哪个"的多选，防止小模型误触发真实工具
@@ -95,6 +112,10 @@ class ConnectionHandler:
 
         self.need_bind = False  # 是否需要绑定设备
         self.bind_completed_event = asyncio.Event()
+        # 组件（增强 system prompt、few-shot、工具）初始化完成。
+        # 第一条用户消息可能早于后台初始化到达，必须等它完成后再进 LLM，
+        # 否则会只带 quick prompt 回复，丢掉人设、TTS 格式和工具示例。
+        self.components_ready_event = asyncio.Event()
         self.bind_code = None  # 绑定设备的验证码
         self.last_bind_prompt_time = 0  # 上次播放绑定提示的时间戳(秒)
         self.bind_prompt_interval = 60  # 绑定提示播放间隔(秒)
@@ -302,6 +323,13 @@ class ConnectionHandler:
 
             # 守护线程2：走老流程记忆保存（仅记忆，不含标题）
             if self.memory:
+                # few-shot 只是格式示例，不属于真实对话，不能进入长期记忆
+                memory_messages = [
+                    m
+                    for m in self.dialogue.dialogue
+                    if not getattr(m, "is_temporary", False)
+                ]
+
                 # 使用线程池异步保存记忆
                 def save_memory_task():
                     try:
@@ -310,7 +338,7 @@ class ConnectionHandler:
                         asyncio.set_event_loop(loop)
                         loop.run_until_complete(
                             self.memory.save_memory(
-                                self.dialogue.dialogue, self.session_id
+                                memory_messages, self.session_id
                             )
                         )
                     except Exception as e:
@@ -655,6 +683,16 @@ class ConnectionHandler:
 
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"实例化组件失败: {e}")
+        finally:
+            # 即使初始化失败也要放行，避免 startToChat 一直等下去
+            try:
+                if self.loop:
+                    self.loop.call_soon_threadsafe(self.components_ready_event.set)
+                else:
+                    self.components_ready_event.set()
+            except RuntimeError:
+                # 连接已关闭，事件循环不可用
+                pass
 
     def _init_prompt_enhancement(self):
 
@@ -672,9 +710,12 @@ class ConnectionHandler:
 
     def _inject_tool_call_fewshot(self):
         """注入工具调用 few-shot 示例到对话历史。
-        结构：正样本（工具调用示例）放在动态 system 之前，可命中前缀缓存；
-        负样本（直接回答示例）放在动态 system 之后、紧挨真实用户消息，
-        确保模型在处理用户消息前最后看到的是"不调工具"的行为模式。
+
+        所有示例都标记为 is_temporary，放在 system 之后、真实对话之前；
+        用户消息统一加 [示例] 前缀，配合 system prompt 的说明，避免模型把
+        示例当成真实历史。顺序固定为：真实工具调用在前，direct_answer 在
+        最后，确保模型处理真实用户消息前最后看到的是“直接回答”模式，而
+        不是一个尚未完成的告别或故事。
         """
         if self.intent_type != "function_call":
             return
@@ -686,47 +727,20 @@ class ConnectionHandler:
             return
 
         tool_names = {t.get("function", {}).get("name") for t in tools}
+        for message in build_tool_call_fewshot_messages(tool_names):
+            self.dialogue.put(message)
 
-        # === few-shot 示例（is_temporary）===
-        # 展示 direct_answer 携带 response 参数的用法，一次调用完成回复
-
-        # 示例1：direct_answer（回复内容写在 response 参数里，无需递归）
-        da_tc_id = "fewshot_da_001"
-        self.dialogue.put(Message(role="user", content="给我讲个故事吧", is_temporary=True))
-        self.dialogue.put(Message(
-            role="assistant",
-            tool_calls=[{
-                "id": da_tc_id,
-                "function": {"arguments": '{"response": "好呀，你想听什么类型的呀？童话、冒险还是搞笑的？选一个我给你开讲~"}', "name": "direct_answer"},
-                "type": "function", "index": 0,
-            }],
-            is_temporary=True,
-        ))
-        self.dialogue.put(Message(
-            role="tool", tool_call_id=da_tc_id,
-            content="已直接回复", is_temporary=True,
-        ))
-
-        # 示例2：真实工具调用（handle_exit_intent）
-        if "handle_exit_intent" in tool_names:
-            tc_id = "fewshot_exit_001"
-            self.dialogue.put(Message(role="user", content="拜拜", is_temporary=True))
-            self.dialogue.put(Message(
-                role="assistant",
-                tool_calls=[{
-                    "id": tc_id,
-                    "function": {"arguments": '{"say_goodbye": "再见，下次再聊~"}', "name": "handle_exit_intent"},
-                    "type": "function", "index": 0,
-                }],
-                is_temporary=True,
-            ))
-            self.dialogue.put(Message(
-                role="tool", tool_call_id=tc_id,
-                content="退出意图已处理", is_temporary=True,
-            ))
-            self.dialogue.put(Message(
-                role="assistant", content="再见，下次再聊~", is_temporary=True,
-            ))
+        # 明确告诉模型这些回合只是格式示例，避免弱模型把它当成本轮之前
+        # 真实发生过的事情（例如“刚才说要给你讲故事”“你回来啦”）。
+        system_message = next(
+            (m for m in self.dialogue.dialogue if m.role == "system"), None
+        )
+        if (
+            system_message is not None
+            and system_message.content
+            and TOOL_EXAMPLE_NOTE.strip() not in system_message.content
+        ):
+            system_message.content += TOOL_EXAMPLE_NOTE
 
         self.logger.bind(tag=TAG).debug("已注入工具调用 few-shot 示例")
 
@@ -796,6 +810,7 @@ class ConnectionHandler:
             self.executor.submit(self._initialize_components)
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"后台初始化失败: {e}")
+            self.components_ready_event.set()
 
     async def _initialize_private_config_async(self):
         """从接口异步获取差异化配置（异步版本，不阻塞主循环）"""
@@ -1485,22 +1500,67 @@ class ConnectionHandler:
             ]
             self.dialogue.put(Message(role="assistant", tool_calls=all_tool_calls))
 
+            image_parts = []
             for result, tool_call_data in need_llm_tools:
                 text = result.result
-                if text is not None and len(text) > 0:
+                images = getattr(result, "images", None) or []
+                tool_call_id = (
+                    str(uuid.uuid4())
+                    if tool_call_data["id"] is None
+                    else tool_call_data["id"]
+                )
+                if images:
+                    # Tool messages are text-only; attach the photo in the user
+                    # message below so a multimodal main model can see it.
                     self.dialogue.put(
                         Message(
                             role="tool",
-                            tool_call_id=(
-                                str(uuid.uuid4())
-                                if tool_call_data["id"] is None
-                                else tool_call_data["id"]
-                            ),
+                            tool_call_id=tool_call_id,
+                            content=text
+                            or "Photo captured; see the attached image.",
+                        )
+                    )
+                    image_parts.extend(images)
+                elif text is not None and len(text) > 0:
+                    self.dialogue.put(
+                        Message(
+                            role="tool",
+                            tool_call_id=tool_call_id,
                             content=text,
                         )
                     )
 
-            self.chat(None, depth=depth + 1)
+            image_message = None
+            if image_parts:
+                content = [
+                    {
+                        "type": "text",
+                        "text": (
+                            "The photo you requested is attached. Use it to answer "
+                            "the user or decide the next action."
+                        ),
+                    }
+                ]
+                for image in image_parts:
+                    mime = image.get("mimeType") or "image/jpeg"
+                    data = image.get("data") or ""
+                    content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime};base64,{data}"
+                            },
+                        }
+                    )
+                image_message = Message(role="user", content=content)
+                self.dialogue.put(image_message)
+
+            try:
+                self.chat(None, depth=depth + 1)
+            finally:
+                # Do not re-send a ~70 KB base64 image on every later turn.
+                if image_message is not None:
+                    image_message.content = "[photo]"
 
     def _report_worker(self):
         """聊天记录上报工作线程"""

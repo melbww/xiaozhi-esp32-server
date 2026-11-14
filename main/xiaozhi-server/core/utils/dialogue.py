@@ -22,6 +22,96 @@ class Message:
         self.is_temporary = is_temporary  # 标记临时消息（如工具调用提醒）
 
 
+TOOL_EXAMPLE_PREFIX = "[示例]"
+
+
+def build_tool_call_fewshot_messages(tool_names) -> List[Message]:
+    """Build the temporary few-shot turns used to teach the tool-call format.
+
+    Every message is marked ``is_temporary`` and every user turn is prefixed
+    with ``TOOL_EXAMPLE_PREFIX`` so the model (and the system prompt) can tell
+    these turns apart from real history.
+
+    The order is intentional: the real tool call (``handle_exit_intent``) comes
+    first and ``direct_answer`` comes last.  A weak model tends to continue the
+    *last* example, so the last thing it sees before the real user message must
+    be a self-contained "answer directly" pattern rather than an unfinished
+    story or a farewell that makes it think the user already left.
+    """
+    tool_names = set(tool_names or ())
+    messages: List[Message] = []
+
+    # Example 1: real tool call.  Kept first on purpose (see docstring).
+    if "handle_exit_intent" in tool_names:
+        tc_id = "fewshot_exit_001"
+        messages.append(
+            Message(role="user", content=f"{TOOL_EXAMPLE_PREFIX} 拜拜", is_temporary=True)
+        )
+        messages.append(
+            Message(
+                role="assistant",
+                tool_calls=[{
+                    "id": tc_id,
+                    "function": {
+                        "arguments": '{"say_goodbye": "再见，祝你今天顺利~"}',
+                        "name": "handle_exit_intent",
+                    },
+                    "type": "function",
+                    "index": 0,
+                }],
+                is_temporary=True,
+            )
+        )
+        messages.append(
+            Message(
+                role="tool",
+                tool_call_id=tc_id,
+                content="退出意图已处理",
+                is_temporary=True,
+            )
+        )
+        messages.append(
+            Message(
+                role="assistant",
+                content="再见，祝你今天顺利~",
+                is_temporary=True,
+            )
+        )
+
+    # Example 2: direct_answer.  The reply must be self-contained: no question
+    # and no promised follow-up, otherwise the model may treat it as a task the
+    # real user is still waiting for.
+    da_tc_id = "fewshot_da_001"
+    messages.append(
+        Message(role="user", content=f"{TOOL_EXAMPLE_PREFIX} 谢谢", is_temporary=True)
+    )
+    messages.append(
+        Message(
+            role="assistant",
+            tool_calls=[{
+                "id": da_tc_id,
+                "function": {
+                    "arguments": '{"response": "不客气，随时叫我~"}',
+                    "name": "direct_answer",
+                },
+                "type": "function",
+                "index": 0,
+            }],
+            is_temporary=True,
+        )
+    )
+    messages.append(
+        Message(
+            role="tool",
+            tool_call_id=da_tc_id,
+            content="已直接回复",
+            is_temporary=True,
+        )
+    )
+
+    return messages
+
+
 class Dialogue:
     def __init__(self):
         self.dialogue: List[Message] = []

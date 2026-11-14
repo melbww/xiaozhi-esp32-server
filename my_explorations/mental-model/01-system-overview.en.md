@@ -6,6 +6,7 @@
 |-----------|------------|------|------|-------|
 | ESP32 hardware | Real device (mic / speaker / buttons) | C++ firmware | client | real-time |
 | `digital-human` | Browser-based ESP32 simulator + local wake word | Python + JS | 8006 (local) | real-time (simulated) |
+| `log-viewer` | Standalone live-log panel (debug tool) | Python + HTML/JS | 8007 (local) | dev / ops |
 | `xiaozhi-server` | Voice AI engine | Python 3 + asyncio | **8000** WS / **8003** simple OTA | real-time |
 | `manager-api` | Admin backend (config single source of truth) | Java 21 + Spring Boot 3 | **8002** | control |
 | `manager-web` | Web admin UI | Vue.js 2 | 8001 (via Nginx) | control |

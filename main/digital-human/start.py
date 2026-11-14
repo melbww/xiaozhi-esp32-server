@@ -11,7 +11,7 @@ def main() -> int:
 
     config = load_config(runtime_root)
     setup_logging(config.log_file, config.log_level)
-    http_server = TestRuntimeHttpServer(test_root, runtime_log_file=config.log_file)
+    http_server = TestRuntimeHttpServer(test_root)
     app_lock = threading.RLock()
     app = TestRuntimeApplication(config, http_server.event_bridge)
 
@@ -30,8 +30,6 @@ def main() -> int:
 
     print(f"test runtime started: {http_server.page_url}")
     print(f"wakeword bridge websocket: {http_server.bridge_url}")
-    print(f"live logs websocket: {http_server.logs_ws_url}")
-    print(f"live logs page: {http_server.logs_page_url}")
     print(f"wakeword enabled: {config.wakeword_enabled}")
     print("press Ctrl+C to stop")
 

@@ -64,17 +64,9 @@ import HeaderBar from "@/components/HeaderBar.vue";
 import agentApi from '@/apis/module/agent';
 import VersionFooter from "@/components/VersionFooter.vue";
 
-// 默认模型配置常量
-const DEFAULT_MODEL_CONFIG = {
-  ttsModelId: "TTS_EdgeTTS",
-  vadModelId: "VAD_SileroVAD",
-  asrModelId: "ASR_FunASR",
-  llmModelId: "LLM_ChatGLMLLM",
-  vllmModelId: "VLLM_ChatGLMVLLM",
-  memModelId: "Memory_nomem",
-  intentModelId: "Intent_function_call"
-};
-
+// 模板只保存"人设"（昵称/角色介绍等），不再携带模型与音色配置：
+// 这些字段在本页不可编辑，之前会被 DEFAULT_MODEL_CONFIG 悄悄写入并回传给后端，
+// 导致在角色配置页套用模板时把用户已调好的模型/音色整块重置。
 export default {
   name: 'TemplateQuickConfig',
   components: { HeaderBar, VersionFooter },
@@ -84,8 +76,7 @@ export default {
         agentCode: "小智",
         agentName: "",
         systemPrompt: "",
-        sort: 0,
-        model: { ...DEFAULT_MODEL_CONFIG }
+        sort: 0
       },
       templateId: '',
       originalForm: null
@@ -116,9 +107,7 @@ export default {
         agentName: this.form.agentName,
         systemPrompt: this.form.systemPrompt,
         sort: this.form.sort,
-        functions: [],
-        // 包含必要的模型字段以确保API调用成功
-        ...this.form.model
+        functions: []
       };
     },
     
@@ -200,16 +189,7 @@ export default {
         agentName: templateData.agentName || this.form.agentName,
         agentCode: templateData.agentCode || this.form.agentCode,
         systemPrompt: templateData.systemPrompt || this.form.systemPrompt,
-        sort: templateData.sort || this.form.sort,
-        model: {
-          ttsModelId: templateData.ttsModelId || this.form.model.ttsModelId,
-          vadModelId: templateData.vadModelId || this.form.model.vadModelId,
-          asrModelId: templateData.asrModelId || this.form.model.asrModelId,
-          llmModelId: templateData.llmModelId || this.form.model.llmModelId,
-          vllmModelId: templateData.vllmModelId || this.form.model.vllmModelId,
-          memModelId: templateData.memModelId || this.form.model.memModelId,
-          intentModelId: templateData.intentModelId || this.form.model.intentModelId
-        }
+        sort: templateData.sort || this.form.sort
       };
     },
     

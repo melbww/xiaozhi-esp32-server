@@ -11,7 +11,6 @@ from typing import Callable
 
 from ..bridge import WakewordEventBridge
 from ..config.config_loader import load_config
-from ..log_streamer import LogStreamer
 
 
 class TestRuntimeHttpServer:
@@ -20,13 +19,11 @@ class TestRuntimeHttpServer:
         test_root: Path,
         host: str = "0.0.0.0",
         port: int = 8006,
-        runtime_log_file: Path | None = None,
     ) -> None:
         self.test_root = test_root
         self.host = host
         self.port = port
         self.event_bridge = WakewordEventBridge()
-        self.log_streamer = LogStreamer(runtime_log=runtime_log_file)
         self._restart_handler: Callable[[], None] | None = None
         self._restart_lock = threading.Lock()
         self._server = self._build_server()
@@ -36,16 +33,8 @@ class TestRuntimeHttpServer:
         return f"http://127.0.0.1:{self.port}/index.html"
 
     @property
-    def logs_page_url(self) -> str:
-        return f"http://127.0.0.1:{self.port}/logs.html"
-
-    @property
     def bridge_url(self) -> str:
         return f"ws://127.0.0.1:{self.port}/wakeword-ws"
-
-    @property
-    def logs_ws_url(self) -> str:
-        return f"ws://127.0.0.1:{self.port}/logs-ws"
 
     def serve_forever(self) -> None:
         self._server.serve_forever()
@@ -53,7 +42,6 @@ class TestRuntimeHttpServer:
     def shutdown(self) -> None:
         self._server.shutdown()
         self.event_bridge.close()
-        self.log_streamer.stop()
         self._server.server_close()
 
     def set_restart_handler(self, handler: Callable[[], None]) -> None:
@@ -81,7 +69,6 @@ class TestRuntimeHttpServer:
     def _build_server(self) -> ThreadingHTTPServer:
         test_root = self.test_root
         event_bridge = self.event_bridge
-        log_streamer = self.log_streamer
         schedule_restart = self.request_runtime_restart
 
         class TestRuntimeHandler(SimpleHTTPRequestHandler):
@@ -99,10 +86,6 @@ class TestRuntimeHttpServer:
             def do_GET(self) -> None:
                 if self.path == "/wakeword-ws":
                     self._handle_websocket(event_bridge)
-                    return
-
-                if self.path == "/logs-ws":
-                    self._handle_logs_websocket(log_streamer)
                     return
 
                 if self.path == "/health":
@@ -169,63 +152,6 @@ class TestRuntimeHttpServer:
                     pass
                 finally:
                     bridge.remove_client(client_queue)
-
-            def _handle_logs_websocket(self, streamer: LogStreamer) -> None:
-                if self.headers.get("Upgrade", "").lower() != "websocket":
-                    self.send_error(HTTPStatus.BAD_REQUEST, "expected websocket upgrade")
-                    return
-
-                websocket_key = self.headers.get("Sec-WebSocket-Key")
-                if not websocket_key:
-                    self.send_error(HTTPStatus.BAD_REQUEST, "missing Sec-WebSocket-Key")
-                    return
-
-                accept_source = websocket_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-                accept_value = base64.b64encode(
-                    hashlib.sha1(accept_source.encode("utf-8")).digest()
-                ).decode("ascii")
-
-                client_queue = streamer.subscribe()
-                self.send_response(HTTPStatus.SWITCHING_PROTOCOLS)
-                self.send_header("Upgrade", "websocket")
-                self.send_header("Connection", "Upgrade")
-                self.send_header("Sec-WebSocket-Accept", accept_value)
-                self.end_headers()
-
-                try:
-                    self.connection.settimeout(0.2)
-                    recent_frames = streamer.recent(20)
-                    hello = json.dumps(
-                        {
-                            "type": "logs_hello",
-                            "payload": {
-                                "container": streamer.container_name,
-                                "history": len(recent_frames),
-                            },
-                        },
-                        ensure_ascii=False,
-                    )
-                    self._send_websocket_text(hello)
-                    for frame in recent_frames:
-                        self._send_websocket_text(json.dumps(frame, ensure_ascii=False))
-
-                    while True:
-                        # 读取(忽略)客户端消息, 用于检测关闭
-                        self._receive_websocket_message()
-
-                        try:
-                            message = client_queue.get(timeout=0.2)
-                            self._send_websocket_text(message)
-                        except queue.Empty:
-                            if not streamer.is_running():
-                                break
-                            continue
-                except socket.timeout:
-                    pass
-                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
-                    pass
-                finally:
-                    streamer.unsubscribe(client_queue)
 
             def _build_wakeword_config_message(self, bridge: WakewordEventBridge) -> str:
                 try:

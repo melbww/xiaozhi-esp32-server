@@ -26,6 +26,10 @@ flowchart TB
         DHRT["本地Python运行时 · 端口8006<br/>页面服务 / 唤醒词Sherpa-ONNX / 事件桥"]
     end
 
+    subgraph OBS["开发工具 (本机)"]
+        LOGV["log-viewer · 端口8007<br/>实时日志面板"]
+    end
+
     subgraph AI["外部AI服务"]
         AISVC["ASR / LLM / TTS / VAD<br/>(云端或本地)"]
     end
@@ -46,6 +50,11 @@ flowchart TB
     DHPAGE -- "OTA 握手获取WS地址+Token" --> SERVER
     DHPAGE -- "本地事件桥 ws://127.0.0.1:8006/wakeword-ws<br/>(本地·自包含)" <--> DHRT
 
+    %% 日志观测(只读)
+    LOGV -. "docker logs" .-> SERVER
+    LOGV -. "docker logs" .-> API
+    LOGV -. "tail 日志文件" .-> DHRT
+
     %% AI 服务
     SERVER -- "调用" --> AISVC
 
@@ -55,6 +64,7 @@ flowchart TB
     classDef admin fill:#d4edda,stroke:#155724
     classDef ai fill:#f8d7da,stroke:#721c24
     class DH,ESP32 dev
+    class OBS dev
     class API,SERVER backend
     class WEB,MOBILE admin
     class AISVC ai
@@ -69,6 +79,7 @@ flowchart TB
 | `manager-web` | Web 管理界面 | Vue.js | 8001 | 管理员(浏览器) |
 | `manager-mobile` | 移动管理端 | uni-app + Vue3 | 无固定 | 管理员(手机/小程序) |
 | `digital-human` | 数字人测试模块 | Python + HTML/JS | 8006 (本地) | 开发者(无硬件测试) |
+| `log-viewer` | 实时日志面板(排障) | Python (stdlib) + HTML/JS | 8007 (本地) | 开发者(看整栈日志) |
 
 ## 两条主线
 

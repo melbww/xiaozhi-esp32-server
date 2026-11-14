@@ -1,0 +1,4 @@
+*.log
+logs/
+.log-viewer.pid
+__pycache__/
