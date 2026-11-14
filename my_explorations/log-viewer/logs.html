@@ -81,6 +81,15 @@
   .txt.trunc:hover { outline: 1px dashed var(--muted); }
   .txt.trunc.expanded { background: rgba(88,166,255,.06); }
   .txt .hl { background: #d29922; color: #0d1117; border-radius: 2px; padding: 0 1px; }
+  .line-photo { flex: none; display: inline-flex; align-self: center; margin-right: 8px; }
+  .log-photo {
+    /* Fixed 16:9 box: the browser reserves the space before the JPEG loads,
+       so a late load cannot push the view away from the bottom. */
+    width: 176px; height: 99px; object-fit: cover;
+    border: 1px solid var(--border); border-radius: 4px;
+    vertical-align: middle; background: #000;
+  }
+  .log-photo:hover { border-color: var(--info); }
   .txt.stage-VAD  { color: #79c0ff; }
   .txt.stage-ASR  { color: #7ee787; }
   .txt.stage-ASRRAW { color: #56d364; font-weight: 600; }
@@ -454,6 +463,10 @@
     const line = document.createElement("div");
     line.className = "line";
 
+    // Capture before inserting: a photo that finishes loading later must not
+    // leave the view a few pixels above the bottom.
+    const follow = state.autoScroll && !state.paused && isAtBottom();
+
     const src = document.createElement("span");
     src.className = "badge-src";
     src.textContent = frame.source;
@@ -479,6 +492,27 @@
         const expanded = txt.classList.toggle("expanded");
         txt.innerHTML = buildHtml(expanded ? full : shown);
       });
+    }
+
+    if (frame.photo) {
+      const link = document.createElement("a");
+      link.className = "line-photo";
+      link.href = frame.photo;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.title = "打开原图";
+      const img = document.createElement("img");
+      img.className = "log-photo";
+      img.src = frame.photo;
+      img.width = 176;
+      img.height = 99;
+      img.loading = "lazy";
+      img.alt = "photo";
+      img.addEventListener("load", () => {
+        if (follow && state.autoScroll && !state.paused) scrollToBottom();
+      });
+      link.appendChild(img);
+      line.appendChild(link);
     }
 
     line.appendChild(src);

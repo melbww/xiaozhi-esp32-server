@@ -1,5 +1,10 @@
 """设备端MCP工具执行器"""
 
+import base64
+import os
+import time
+import uuid
+from pathlib import Path
 from typing import Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -7,6 +12,42 @@ if TYPE_CHECKING:
 from ..base import ToolType, ToolDefinition, ToolExecutor
 from plugins_func.register import Action, ActionResponse
 from .mcp_handler import call_mcp_tool
+
+# Container cwd is /opt/xiaozhi-esp32-server; tmp/ is bind-mounted to
+# my_explorations/server/deploy/logs, which the log viewer serves as /photos/.
+PHOTO_ROOT = Path(os.environ.get("XIAOZHI_PHOTO_DIR", "tmp/photos"))
+
+
+def _save_photo_parts(conn, images):
+    """Persist received JPEGs and return /photos/... URLs for the log viewer."""
+    urls = []
+    for image in images:
+        data = image.get("data")
+        if not data:
+            continue
+        mime = image.get("mimeType") or "image/jpeg"
+        ext = "jpg" if "jpeg" in mime else (mime.split("/")[-1] or "bin")
+        now = time.time()
+        day = time.strftime("%Y-%m-%d", time.localtime(now))
+        name = (
+            f"{time.strftime('%H-%M-%S', time.localtime(now))}-"
+            f"{uuid.uuid4().hex[:8]}.{ext}"
+        )
+        target = PHOTO_ROOT / day / name
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(base64.b64decode(data))
+        except Exception as exc:
+            logger = getattr(conn, "logger", None)
+            if logger is not None:
+                logger.bind(tag=__name__).warning(f"PHOTO save failed: {exc}")
+            continue
+        url = f"/photos/{day}/{name}"
+        urls.append(url)
+        logger = getattr(conn, "logger", None)
+        if logger is not None:
+            logger.bind(tag=__name__).info(f"PHOTO {url}")
+    return urls
 
 
 class DeviceMCPExecutor(ToolExecutor):
@@ -67,6 +108,9 @@ class DeviceMCPExecutor(ToolExecutor):
                     # ActionResponse is defined outside core/, so attach the
                     # images dynamically; connection.py reads them with getattr.
                     response.images = images
+                    # Save the exact photo for the log viewer and emit a short
+                    # /photos/... line instead of dumping base64 into the log.
+                    response.photo_urls = _save_photo_parts(conn, images)
                     return response
             else:
                 text = result

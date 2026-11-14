@@ -147,6 +147,7 @@ python3 my_explorations/log-viewer/log_viewer.py --list-sources
 - **会话过滤**：`全部 / 未归属 / #<session_id>`，下拉里带会话**开始时间**（`MM-DD HH:MM:SS`）和设备 MAC
 - **会话分组**：同一会话的行折叠成一块，块头显示行数、时间范围、设备；点块头折叠/展开
 - 关键字搜索、暂停、清屏、超长行点击展开
+- **拍照缩略图**：`PHOTO /photos/...` 行**左侧**显示原图缩略图，点击在新标签打开原图；缩略图固定 176×99（16:9），图片加载不会改变行高，不会打断自动滚动
 - 自动跟随：**只在已经滚到底部时**才跟着新日志滚动；往上翻不会被打断，
   自己滚回底部就恢复跟随
 - `空格` 暂停/恢复自动跟随；不在底部时右下角出现 `⬇ 最新` 按钮，
@@ -164,11 +165,36 @@ python3 my_explorations/log-viewer/log_viewer.py --list-sources
 | `/api/sources` | 源列表 + 连接状态 / 行数 / 最后一行时间 + 已知会话 |
 | `/api/recordings` | 录制目录、保留天数、按天列出文件 |
 | `/api/recordings/<date>/<source>?limit=2000&session=<id>` | 读取某个源某天的录制（ndjson） |
+| `/photos/<date>/<file>` | 查看机器人拍照保存的 JPEG（见下） |
 | `/health` | `{"status":"ok","sources":[...],"recording":{...}}` |
 
 ```sh
 curl -s 'http://127.0.0.1:8007/api/recordings/2026-11-13/server?session=__none__' | head
 ```
+
+### 拍照缩略图
+
+`core/providers/tools/device_mcp/mcp_executor.py` 在收到 `take_photo` 的图片时，
+把**同一张图**写到容器的 `tmp/photos/<YYYY-MM-DD>/<HH-MM-SS>-<id>.jpg`，并打印：
+
+```text
+PHOTO /photos/2026-11-14/16-56-22-e836ac65.jpg
+```
+
+- 容器的 `tmp/` 已 bind-mount 到
+  `my_explorations/server/deploy/logs/`，所以主机上的原图在
+  `my_explorations/server/deploy/logs/photos/`。
+- 面板识别 `PHOTO /photos/...`，在日志行**最左侧**渲染缩略图；`/photos/` 是只读路由。
+- 缩略图用固定 176×99 的 16:9 盒子（`object-fit: cover`），JPEG 晚加载也不会改变行高，
+  贴底自动滚动因此保持正常。
+- LLM 请求日志里的 `data:image/...;base64,...` 会被替换成
+  `data:image/<redacted>;base64,<omitted>`，避免每张图 ~70 KB 的 base64
+  刷满日志和录制文件。
+- 如果部署目录不同，给**面板进程**设置 `XIAOZHI_PHOTO_DIR=/path/to/photos`；
+  给**服务端容器**设置同名环境变量时则用容器内路径（默认 `tmp/photos`）。
+- 需要按会话归档日志和照片时，用
+  [`../server/iac/split-sessions.py`](../server/iac/split-sessions.py)，
+  产物在 `../server/deploy/logs/sessions/`（见 [server README](../server/README.md)）。
 
 ## 排障
 

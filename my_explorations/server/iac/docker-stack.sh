@@ -9,6 +9,7 @@
 #   ./docker-stack.sh logs [svc]  # 查看日志 (svc: server/web/db/redis)
 #   ./docker-stack.sh restart     # 重启 xiaozhi-server (改配置后)
 #   ./docker-stack.sh bootstrap   # 自动注册管理员并回填 server.secret
+#   ./docker-stack.sh sessions    # 把 server.log 拆成按会话的目录+索引
 #
 # 说明:
 #   - 复用仓库自带 docker-compose_all.yml, 通过 --project-directory 将
@@ -57,6 +58,10 @@ case "${1:-up}" in
     docker restart xiaozhi-esp32-server
     sleep 3
     docker logs --tail=20 xiaozhi-esp32-server
+    ;;
+  sessions)
+    # 派生视图: 原始 server.log 不动; 多余的参数透传给 split-sessions.py
+    python3 "$ROOT/my_explorations/server/iac/split-sessions.py" "${@:2}"
     ;;
   bootstrap)
     # bootstrap 只需要 gmssl; 用 server 自己的 venv, 不再依赖 digital-human 运行时。

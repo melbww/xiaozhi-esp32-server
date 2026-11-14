@@ -2,7 +2,9 @@
 #  - data/      含真实 server.secret 与引擎运行时文件 (仅保留模板 config.template.yaml)
 #  - mysql/     MySQL 数据文件 (数百个, 机器相关, 体积大)
 #  - uploadfile/ OTA 固件等上传文件
+#  - logs/      容器 tmp/ 的 bind-mount：原始 server.log、拍照、会话拆分产物
 data/
 mysql/
 uploadfile/
+logs/
 *.log

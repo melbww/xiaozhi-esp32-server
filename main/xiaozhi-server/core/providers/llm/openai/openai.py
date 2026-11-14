@@ -1,4 +1,5 @@
 import json
+import re
 import httpx
 import openai
 from openai.types import CompletionUsage
@@ -9,6 +10,14 @@ from urllib.parse import urlparse
 
 TAG = __name__
 logger = setup_logging()
+
+# Never dump a full base64 image into the server log (it is ~70 KB per photo
+# and would flood the log viewer). The actual request keeps the image.
+_DATA_URI_RE = re.compile(r"data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+")
+
+
+def _redact_images(text: str) -> str:
+    return _DATA_URI_RE.sub("data:image/<redacted>;base64,<omitted>", text)
 
 # 需要禁用思考模式的平台域名及其对应参数（默认关闭思考模式）
 THINKING_DISABLED_DOMAINS = {
@@ -145,7 +154,7 @@ class LLMProvider(LLMProviderBase):
         # 调试: 打印发送给远端 LLM 的完整请求(messages 全文)
         logger.bind(tag=TAG).info(
             f"LLM 请求 -> {self.base_url} model={self.model_name} "
-            f"messages={json.dumps(request_params.get('messages', []), ensure_ascii=False, default=str)}"
+            f"messages={_redact_images(json.dumps(request_params.get('messages', []), ensure_ascii=False, default=str))}"
         )
 
         responses = self.client.chat.completions.create(**request_params)
@@ -207,7 +216,7 @@ class LLMProvider(LLMProviderBase):
         logger.bind(tag=TAG).info(
             f"LLM 请求(工具调用) -> {self.base_url} model={self.model_name} "
             f"tools={json.dumps(tool_names, ensure_ascii=False)} "
-            f"messages={json.dumps(request_params.get('messages', []), ensure_ascii=False, default=str)}"
+            f"messages={_redact_images(json.dumps(request_params.get('messages', []), ensure_ascii=False, default=str))}"
         )
 
         stream = self.client.chat.completions.create(**request_params)

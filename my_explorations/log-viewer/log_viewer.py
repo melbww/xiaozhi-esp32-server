@@ -43,6 +43,17 @@ DEFAULT_CONFIG = APP_DIR / "sources.json"
 DEFAULT_HISTORY = 200
 DEFAULT_PORT = 8007
 
+# Photos saved by the server land in the container's tmp/ (bind-mounted to
+# deploy/logs). Serve them next to the log page so a PHOTO line can show the
+# exact frame the model received.
+PHOTO_ROOT = Path(
+    os.environ.get(
+        "XIAOZHI_PHOTO_DIR",
+        REPO_ROOT / "my_explorations" / "server" / "deploy" / "logs" / "photos",
+    )
+)
+PHOTO_RE = re.compile(r"(/photos/[0-9A-Za-z._/-]+\.(?:jpe?g|png))", re.IGNORECASE)
+
 LEVEL_TOKENS = (
     ("error", ("-ERROR-", " - ERROR - ", "[ERROR]", "ERROR:", "] ERROR ")),
     ("warn", ("-WARNING-", "-WARN-", " - WARNING - ", "[WARNING]", "WARN:", "] WARNING ", "] WARN ")),
@@ -622,6 +633,9 @@ class LogStreamer:
             frame["session"] = session
         if device:
             frame["device"] = device
+        photo = PHOTO_RE.search(line)
+        if photo:
+            frame["photo"] = photo.group(1)
         payload = json.dumps(frame, ensure_ascii=False)
 
         with self._lock:
@@ -873,6 +887,10 @@ class LogViewerHandler(SimpleHTTPRequestHandler):
             self._send_recording(path)
             return
 
+        if path.startswith("/photos/"):
+            self._send_photo(path)
+            return
+
         if path in ("/", "/index.html"):
             self.path = "/logs.html"
 
@@ -892,6 +910,27 @@ class LogViewerHandler(SimpleHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type + "; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_photo(self, url_path: str) -> None:
+        rel = url_path[len("/photos/") :]
+        try:
+            root = PHOTO_ROOT.resolve()
+            target = (root / rel).resolve()
+            target.relative_to(root)
+        except (ValueError, OSError):
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        if not target.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        body = target.read_bytes()
+        ctype = "image/png" if target.suffix.lower() == ".png" else "image/jpeg"
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Cache-Control", "max-age=3600")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
