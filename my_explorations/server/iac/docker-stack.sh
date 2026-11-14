@@ -8,6 +8,7 @@
 #   ./docker-stack.sh status      # 容器状态
 #   ./docker-stack.sh logs [svc]  # 查看日志 (svc: server/web/db/redis)
 #   ./docker-stack.sh restart     # 重启 xiaozhi-server (改配置后)
+#   ./docker-stack.sh web         # 仅重建 web 容器 (前端 npm run build 后)
 #   ./docker-stack.sh bootstrap   # 自动注册管理员并回填 server.secret
 #   ./docker-stack.sh sessions    # 把 server.log 拆成按会话的目录+索引
 #
@@ -26,11 +27,18 @@ PROJECT_DIR="$ROOT/my_explorations/server/deploy"
 PROJECT_NAME="xiaozhi"
 # 开发调试覆盖: 将本地 main/xiaozhi-server/core bind-mount 进容器(见该文件头注释)
 SOURCE_OVERRIDE="$ROOT/my_explorations/server/iac/compose.server-source.yml"
+# 开发调试覆盖: 将本地构建的 main/manager-web/dist bind-mount 进 web 容器
+WEB_DIST_OVERRIDE="$ROOT/my_explorations/server/iac/compose.web-dist.yml"
+WEB_DIST_DIR="$ROOT/main/manager-web/dist"
 
 # 供 compose 插值 ${XIAOZHI_REPO_ROOT}(覆盖文件中的相对路径基准)
 export XIAOZHI_REPO_ROOT="$ROOT"
 
 COMPOSE_ARGS=(--project-name "$PROJECT_NAME" --project-directory "$PROJECT_DIR" -f "$COMPOSE" -f "$SOURCE_OVERRIDE")
+# 未构建前端时不挂载 dist, 避免 nginx 404; 构建后自动启用本覆盖
+if [ -f "$WEB_DIST_DIR/index.html" ]; then
+  COMPOSE_ARGS+=(-f "$WEB_DIST_OVERRIDE")
+fi
 
 case "${1:-up}" in
   up)
@@ -58,6 +66,15 @@ case "${1:-up}" in
     docker restart xiaozhi-esp32-server
     sleep 3
     docker logs --tail=20 xiaozhi-esp32-server
+    ;;
+  web)
+    # 前端改动后: cd main/manager-web && npm run build, 然后执行本命令
+    if [ ! -f "$WEB_DIST_DIR/index.html" ]; then
+      echo "ERROR: $WEB_DIST_DIR 未构建, 请先执行: (cd main/manager-web && npm ci && npm run build)" >&2
+      exit 1
+    fi
+    docker compose "${COMPOSE_ARGS[@]}" up -d --no-deps --force-recreate --pull never xiaozhi-esp32-server-web
+    docker compose --project-name "$PROJECT_NAME" ps xiaozhi-esp32-server-web
     ;;
   sessions)
     # 派生视图: 原始 server.log 不动; 多余的参数透传给 split-sessions.py
