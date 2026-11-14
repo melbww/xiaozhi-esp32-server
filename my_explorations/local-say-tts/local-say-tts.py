@@ -6,7 +6,7 @@ same POST shape as the CustomTTS provider and returns a 22.05 kHz mono WAV.
 
 Usage:
     python3 local-say-tts.py                 # foreground, port 8880
-    SAY_TTS_VOICE_ZH='Yue (Premium)' SAY_TTS_VOICE_EN='Matilda (Premium)' \
+    SAY_TTS_VOICE_ZH='Yue (Premium)' SAY_TTS_VOICE_EN='Zoe (Premium)' \
         python3 local-say-tts.py
 
 CustomTTS config in the 智控台:
@@ -17,7 +17,7 @@ CustomTTS config in the 智控台:
 
 Voice routing: text containing CJK characters uses SAY_TTS_VOICE_ZH
 (default `Yue (Premium)`), everything else uses SAY_TTS_VOICE_EN
-(default `Matilda (Premium)`). An explicit request `voice` field always wins;
+(default `Zoe (Premium)`). An explicit request `voice` field always wins;
 setting SAY_TTS_VOICE forces one voice for all text.
 
 Rate routing follows the same language rule: SAY_TTS_RATE_ZH (default 180)
@@ -41,7 +41,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = os.environ.get("SAY_TTS_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SAY_TTS_PORT", "8880"))
 VOICE_ZH = os.environ.get("SAY_TTS_VOICE_ZH", "Yue (Premium)")
-VOICE_EN = os.environ.get("SAY_TTS_VOICE_EN", "Matilda (Premium)")
+VOICE_EN = os.environ.get("SAY_TTS_VOICE_EN", "Zoe (Premium)")
 FORCED_VOICE = os.environ.get("SAY_TTS_VOICE", "").strip()
 RATE_ZH = int(os.environ.get("SAY_TTS_RATE_ZH", "180"))
 RATE_EN = int(os.environ.get("SAY_TTS_RATE_EN", "140"))

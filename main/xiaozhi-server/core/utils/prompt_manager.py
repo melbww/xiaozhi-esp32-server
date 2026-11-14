@@ -133,13 +133,13 @@ class PromptManager:
         """获取当前时间信息"""
         from .current_time import (
             get_current_date,
-            get_current_weekday,
-            get_current_lunar_date,
+            get_current_weekday_en,
+            get_current_lunar_date_en,
         )
 
         today_date = get_current_date()
-        today_weekday = get_current_weekday()
-        lunar_date = get_current_lunar_date() + "\n"
+        today_weekday = get_current_weekday_en()
+        lunar_date = get_current_lunar_date_en()
 
         return today_date, today_weekday, lunar_date
 

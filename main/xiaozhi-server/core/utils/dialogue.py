@@ -22,7 +22,7 @@ class Message:
         self.is_temporary = is_temporary  # 标记临时消息（如工具调用提醒）
 
 
-TOOL_EXAMPLE_PREFIX = "[示例]"
+TOOL_EXAMPLE_PREFIX = "[example]"
 
 
 def build_tool_call_fewshot_messages(tool_names) -> List[Message]:
@@ -45,7 +45,7 @@ def build_tool_call_fewshot_messages(tool_names) -> List[Message]:
     if "handle_exit_intent" in tool_names:
         tc_id = "fewshot_exit_001"
         messages.append(
-            Message(role="user", content=f"{TOOL_EXAMPLE_PREFIX} 拜拜", is_temporary=True)
+            Message(role="user", content=f"{TOOL_EXAMPLE_PREFIX} bye bye", is_temporary=True)
         )
         messages.append(
             Message(
@@ -53,7 +53,7 @@ def build_tool_call_fewshot_messages(tool_names) -> List[Message]:
                 tool_calls=[{
                     "id": tc_id,
                     "function": {
-                        "arguments": '{"say_goodbye": "再见，祝你今天顺利~"}',
+                        "arguments": '{"say_goodbye": "Goodbye, have a great day!"}',
                         "name": "handle_exit_intent",
                     },
                     "type": "function",
@@ -66,14 +66,14 @@ def build_tool_call_fewshot_messages(tool_names) -> List[Message]:
             Message(
                 role="tool",
                 tool_call_id=tc_id,
-                content="退出意图已处理",
+                content="Exit intent handled",
                 is_temporary=True,
             )
         )
         messages.append(
             Message(
                 role="assistant",
-                content="再见，祝你今天顺利~",
+                content="Goodbye, have a great day!",
                 is_temporary=True,
             )
         )
@@ -83,7 +83,7 @@ def build_tool_call_fewshot_messages(tool_names) -> List[Message]:
     # real user is still waiting for.
     da_tc_id = "fewshot_da_001"
     messages.append(
-        Message(role="user", content=f"{TOOL_EXAMPLE_PREFIX} 谢谢", is_temporary=True)
+        Message(role="user", content=f"{TOOL_EXAMPLE_PREFIX} thanks", is_temporary=True)
     )
     messages.append(
         Message(
@@ -91,7 +91,7 @@ def build_tool_call_fewshot_messages(tool_names) -> List[Message]:
             tool_calls=[{
                 "id": da_tc_id,
                 "function": {
-                    "arguments": '{"response": "不客气，随时叫我~"}',
+                    "arguments": '{"response": "You are welcome, anytime!"}',
                     "name": "direct_answer",
                 },
                 "type": "function",
@@ -104,7 +104,7 @@ def build_tool_call_fewshot_messages(tool_names) -> List[Message]:
         Message(
             role="tool",
             tool_call_id=da_tc_id,
-            content="已直接回复",
+            content="Replied directly",
             is_temporary=True,
         )
     )

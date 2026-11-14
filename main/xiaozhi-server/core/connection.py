@@ -64,11 +64,12 @@ class TTSException(RuntimeError):
 # 以及只 bind-mount core/ 的部署也能生效。
 TOOL_EXAMPLE_NOTE = (
     "\n\n<tool_example_rules>\n"
-    "对话历史中以“[示例]”开头的回合只是工具调用格式示范，不是真实对话，"
-    "也不是你的记忆，不代表用户真的说过这些话。\n"
-    "绝对不要提及、延续或引用它们，也不要把它们当成已发生的事实、承诺，"
-    "或你曾经说过的话。\n"
-    "真实对话只从最后一条不带“[示例]”的用户消息开始；只回答这条消息。\n"
+    "Turns that start with \"[example]\" are only demonstrations of the tool-call format. "
+    "They are NOT real conversation, NOT your memory, and do NOT mean the user actually said those things.\n"
+    "Never mention, continue, or quote them, and never treat them as facts, promises, "
+    "or words you once said.\n"
+    "The real conversation starts at the last user message that does NOT begin with \"[example]\"; "
+    "answer only that message.\n"
     "</tool_example_rules>"
 )
 
@@ -712,7 +713,7 @@ class ConnectionHandler:
         """注入工具调用 few-shot 示例到对话历史。
 
         所有示例都标记为 is_temporary，放在 system 之后、真实对话之前；
-        用户消息统一加 [示例] 前缀，配合 system prompt 的说明，避免模型把
+        用户消息统一加 [example] 前缀，配合 system prompt 的说明，避免模型把
         示例当成真实历史。顺序固定为：真实工具调用在前，direct_answer 在
         最后，确保模型处理真实用户消息前最后看到的是“直接回答”模式，而
         不是一个尚未完成的告别或故事。

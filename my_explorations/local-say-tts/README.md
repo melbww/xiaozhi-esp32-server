@@ -37,14 +37,14 @@ out enables automatic routing by text language:
 | Text | Voice | Rate (wpm) | Env override |
 |---|---|---|---|---|
 | Contains Chinese | `Yue (Premium)` (`zh_CN`) | 180 | `SAY_TTS_VOICE_ZH`, `SAY_TTS_RATE_ZH` |
-| Everything else | `Matilda (Premium)` (`en_AU`) | 140 | `SAY_TTS_VOICE_EN`, `SAY_TTS_RATE_EN` |
+| Everything else | `Zoe (Premium)` (`en_US`) | 140 | `SAY_TTS_VOICE_EN`, `SAY_TTS_RATE_EN` |
 
 An explicit per-request `voice` or `rate` field still wins. Setting
 `SAY_TTS_VOICE` / `SAY_TTS_RATE` forces one value for all text, e.g.
 `SAY_TTS_VOICE=Meijia`.
 
-Rate notes: premium voices scale non-linearly with `say -r`. On Matilda,
-180 → 140 adds roughly 8% duration; 120 adds ~14%. Below ~100 it sounds
+Rate notes: premium voices scale non-linearly with `say -r`. On Zoe,
+180 → 140 adds roughly 8% duration; 120 adds ~13%. Below ~100 it sounds
 laboured.
 
 Note: forcing an English-only voice on Chinese text produces silence — `say`
