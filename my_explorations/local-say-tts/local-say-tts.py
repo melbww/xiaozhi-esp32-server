@@ -6,7 +6,7 @@ same POST shape as the CustomTTS provider and returns a 22.05 kHz mono WAV.
 
 Usage:
     python3 local-say-tts.py                 # foreground, port 8880
-    SAY_TTS_VOICE_ZH='Yue (Premium)' SAY_TTS_VOICE_EN='Zoe (Premium)' \
+    SAY_TTS_VOICE_ZH='Yue (Premium)' SAY_TTS_VOICE_EN='Matilda (Premium)' \
         python3 local-say-tts.py
 
 CustomTTS config in the 智控台:
@@ -17,8 +17,12 @@ CustomTTS config in the 智控台:
 
 Voice routing: text containing CJK characters uses SAY_TTS_VOICE_ZH
 (default `Yue (Premium)`), everything else uses SAY_TTS_VOICE_EN
-(default `Zoe (Premium)`). An explicit request `voice` field always wins;
+(default `Matilda (Premium)`). An explicit request `voice` field always wins;
 setting SAY_TTS_VOICE forces one voice for all text.
+
+Rate routing follows the same language rule: SAY_TTS_RATE_ZH (default 180)
+and SAY_TTS_RATE_EN (default 140, words per minute). An explicit request
+`rate` field always wins; SAY_TTS_RATE forces one rate for all text.
 
 Voices: `say -v '?' | grep -E 'zh|en_US'` (Meijia is Taiwanese, Tingting is
 mainland, Sinji is Cantonese). The service is intentionally LAN-only; do not
@@ -37,9 +41,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = os.environ.get("SAY_TTS_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SAY_TTS_PORT", "8880"))
 VOICE_ZH = os.environ.get("SAY_TTS_VOICE_ZH", "Yue (Premium)")
-VOICE_EN = os.environ.get("SAY_TTS_VOICE_EN", "Zoe (Premium)")
+VOICE_EN = os.environ.get("SAY_TTS_VOICE_EN", "Matilda (Premium)")
 FORCED_VOICE = os.environ.get("SAY_TTS_VOICE", "").strip()
-DEFAULT_RATE = int(os.environ.get("SAY_TTS_RATE", "180"))
+RATE_ZH = int(os.environ.get("SAY_TTS_RATE_ZH", "180"))
+RATE_EN = int(os.environ.get("SAY_TTS_RATE_EN", "140"))
+FORCED_RATE = os.environ.get("SAY_TTS_RATE", "").strip()
 MAX_CONCURRENT = int(os.environ.get("SAY_TTS_MAX_CONCURRENT", "4"))
 SAY = "/usr/bin/say"
 AFCONVERT = "/usr/bin/afconvert"
@@ -54,6 +60,15 @@ def pick_voice(text: str, requested: str = "") -> str:
     if FORCED_VOICE:
         return FORCED_VOICE
     return VOICE_ZH if CJK_RE.search(text) else VOICE_EN
+
+
+def pick_rate(text: str, requested=None) -> int:
+    """Choose a rate: explicit request > forced env > CJK/English routing."""
+    if requested not in (None, ""):
+        return int(requested)
+    if FORCED_RATE:
+        return int(FORCED_RATE)
+    return RATE_ZH if CJK_RE.search(text) else RATE_EN
 
 
 _semaphore = threading.BoundedSemaphore(MAX_CONCURRENT)
@@ -91,7 +106,9 @@ class Handler(BaseHTTPRequestHandler):
                     "voice_zh": VOICE_ZH,
                     "voice_en": VOICE_EN,
                     "forced_voice": FORCED_VOICE or None,
-                    "rate": DEFAULT_RATE,
+                    "rate_zh": RATE_ZH,
+                    "rate_en": RATE_EN,
+                    "forced_rate": FORCED_RATE or None,
                 }
             ).encode()
             self.send_response(200)
@@ -110,16 +127,16 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length) or b"{}")
             text = payload.get("input") or payload.get("text") or ""
-            rate = int(payload.get("rate") or DEFAULT_RATE)
             if not isinstance(text, str) or not text.strip():
                 raise ValueError("empty input")
             text = text.strip()
             voice = pick_voice(text, payload.get("voice"))
+            rate = pick_rate(text, payload.get("rate"))
             started = time.time()
             audio = synthesize(text, voice, rate)
             print(
                 f"{time.strftime('%H:%M:%S')} tts {len(audio)} bytes "
-                f"in {time.time() - started:.2f}s voice={voice} text={text[:40]!r}",
+                f"in {time.time() - started:.2f}s voice={voice} rate={rate} text={text[:40]!r}",
                 flush=True,
             )
             self.send_response(200)
@@ -141,7 +158,8 @@ def main():
     print(
         f"Local say TTS listening on http://{HOST}:{PORT}/tts "
         f"(zh={VOICE_ZH}, en={VOICE_EN}, "
-        f"forced={FORCED_VOICE or 'auto'}, rate={DEFAULT_RATE})",
+        f"forced={FORCED_VOICE or 'auto'}, rate zh={RATE_ZH} en={RATE_EN}, "
+        f"forced_rate={FORCED_RATE or 'auto'})",
         flush=True,
     )
     try:

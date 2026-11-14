@@ -34,16 +34,21 @@ format: wav
 Do **not** set `voice` in `params` unless you want to pin one voice; leaving it
 out enables automatic routing by text language:
 
-| Text | Voice | Env override |
-|---|---|---|
-| Contains Chinese | `Yue (Premium)` (`zh_CN`) | `SAY_TTS_VOICE_ZH` |
-| Everything else | `Zoe (Premium)` (`en_US`) | `SAY_TTS_VOICE_EN` |
+| Text | Voice | Rate (wpm) | Env override |
+|---|---|---|---|---|
+| Contains Chinese | `Yue (Premium)` (`zh_CN`) | 180 | `SAY_TTS_VOICE_ZH`, `SAY_TTS_RATE_ZH` |
+| Everything else | `Matilda (Premium)` (`en_AU`) | 140 | `SAY_TTS_VOICE_EN`, `SAY_TTS_RATE_EN` |
 
-An explicit per-request `voice` field still wins. Setting `SAY_TTS_VOICE`
-forces a single voice for all text, e.g. `SAY_TTS_VOICE=Meijia`.
+An explicit per-request `voice` or `rate` field still wins. Setting
+`SAY_TTS_VOICE` / `SAY_TTS_RATE` forces one value for all text, e.g.
+`SAY_TTS_VOICE=Meijia`.
 
-Note: forcing an `en_US` voice on Chinese text produces silence — `say` does
-not fall back to another voice.
+Rate notes: premium voices scale non-linearly with `say -r`. On Matilda,
+180 → 140 adds roughly 8% duration; 120 adds ~14%. Below ~100 it sounds
+laboured.
+
+Note: forcing an English-only voice on Chinese text produces silence — `say`
+does not fall back to another voice.
 
 The current agent uses `TTS_CustomTTS` (自定义语音合成), with `voice` removed from
 its params so the service routes by language.

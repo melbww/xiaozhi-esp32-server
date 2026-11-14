@@ -62,7 +62,10 @@ case "${1:-up}" in
     docker compose --project-name "$PROJECT_NAME" logs -f --tail=50 "${2:-}"
     ;;
   restart)
-    echo "重启 xiaozhi-server (使 data/.config.yaml 生效)..."
+    # 提示词模板在 data/ 内 (deploy/data/.agent-base-prompt.txt), 从仓库版本同步后再重启,
+    # 这样编辑 main/xiaozhi-server/agent-base-prompt.txt 后只需执行本命令即可生效。
+    cp "$ROOT/main/xiaozhi-server/agent-base-prompt.txt" "$PROJECT_DIR/data/.agent-base-prompt.txt"
+    echo "重启 xiaozhi-server (使 data/.config.yaml / 提示词模板生效)..."
     docker restart xiaozhi-esp32-server
     sleep 3
     docker logs --tail=20 xiaozhi-esp32-server

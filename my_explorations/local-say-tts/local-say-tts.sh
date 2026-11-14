@@ -12,7 +12,7 @@
 #   - 仅 macOS 可用, 使用系统 say + afconvert, 无需联网/API Key
 #   - 服务监听 0.0.0.0:8880, Docker 内通过 host.docker.internal:8880 访问
 #   - 按文本语言自动选音色: 中文 SAY_TTS_VOICE_ZH(默认 Yue (Premium)),
-#     其他 SAY_TTS_VOICE_EN(默认 Zoe (Premium)); SAY_TTS_VOICE 可强制单一音色
+#     其他 SAY_TTS_VOICE_EN(默认 Matilda (Premium)); SAY_TTS_VOICE 可强制单一音色
 # =============================================================================
 set -euo pipefail
 
@@ -46,7 +46,8 @@ case "${1:-start}" in
     echo "  endpoint: http://127.0.0.1:$PORT/tts"
     echo "  docker:   http://host.docker.internal:$PORT/tts"
     echo "  health:   http://127.0.0.1:$PORT/health"
-    echo "  voice:    zh=${SAY_TTS_VOICE_ZH:-Yue (Premium)} en=${SAY_TTS_VOICE_EN:-Zoe (Premium)} (auto; SAY_TTS_VOICE forces one)"
+    echo "  voice:    zh=${SAY_TTS_VOICE_ZH:-Yue (Premium)} en=${SAY_TTS_VOICE_EN:-Matilda (Premium)}"
+    echo "  rate:     zh=${SAY_TTS_RATE_ZH:-180} en=${SAY_TTS_RATE_EN:-140} wpm (auto; env forces one)"
     echo "  log:      $LOG_FILE"
     ;;
   stop)
