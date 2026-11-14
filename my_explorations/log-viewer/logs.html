@@ -231,6 +231,10 @@
   const jumpBtn = document.getElementById("jumpBottom");
   const sessSel = document.getElementById("sessSelect");
   const groupBtn = document.getElementById("groupBtn");
+  const hintEl = document.getElementById("hint");
+  const defaultHint = hintEl.textContent;
+  const loadedSessions = new Set();
+  let loadToken = 0;
 
   // 视为"贴底"的容差(px): 在这个范围内就认为用户在看最新内容
   const SCROLL_TOLERANCE = 24;
@@ -354,6 +358,108 @@
     }
     known.last = frame.ts;
     if (frame.device) known.device = frame.device;
+  }
+
+  // ---------- 历史会话按需加载 ----------
+  function setHint(text) {
+    hintEl.textContent = text || defaultHint;
+  }
+  function frameKey(frame) {
+    return (frame.source || "") + "\u0000" + (frame.ts || 0) + "\u0000" + (frame.line || "");
+  }
+  function dayStr(ts) {
+    const d = new Date(ts * 1000);
+    const p = (n) => String(n).padStart(2, "0");
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  }
+  function sessionDays(meta) {
+    let first = meta && meta.first;
+    let last = meta && meta.last;
+    if (!first && meta) {
+      const own = state.frames.filter((f) => f.session === meta.id);
+      if (own.length) { first = own[0].ts; last = own[own.length - 1].ts; }
+    }
+    if (!first) return [];
+    const start = new Date(first * 1000);
+    const end = new Date((last || first) * 1000);
+    const days = [];
+    const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const limit = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    while (cursor <= limit && days.length < 8) {
+      days.push(dayStr(cursor.getTime() / 1000));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  }
+
+  async function loadRecordedSession(meta) {
+    if (!meta || !meta.id) return;
+    const id = meta.id;
+    const token = ++loadToken;
+    const days = sessionDays(meta);
+    const source = meta.source || "server";
+    if (!days.length) {
+      setHint("无法确定 " + sessionLabel(id) + " 的录制日期");
+      return;
+    }
+    setHint("正在从录制加载 " + sessionLabel(id) + " …");
+    const fetched = [];
+    for (const day of days) {
+      try {
+        const url = "/api/recordings/" + encodeURIComponent(day) + "/" +
+          encodeURIComponent(source) + "?session=" + encodeURIComponent(id) +
+          "&limit=5000";
+        const response = await fetch(url);
+        if (!response.ok) continue;
+        const text = await response.text();
+        for (const line of text.split("\n")) {
+          if (!line.trim()) continue;
+          try { fetched.push(JSON.parse(line)); } catch (error) {}
+        }
+      } catch (error) {}
+    }
+    if (token !== loadToken) return;
+    loadedSessions.add(id);
+
+    const seen = new Set(state.frames.map(frameKey));
+    let added = 0;
+    for (const frame of fetched) {
+      if (!frame || !frame.line) continue;
+      const key = frameKey(frame);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      state.frames.push(frame);
+      state.total++;
+      added++;
+      noteSession(frame);
+    }
+    state.frames.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    if (state.frames.length > MAX_FRAMES) {
+      state.frames.splice(0, state.frames.length - MAX_FRAMES);
+    }
+    rerender();
+    if (added) {
+      logEl.scrollTop = 0;
+      updateJumpHint();
+      setHint("已加载 " + added + " 行历史会话 " + sessionLabel(id) + "（来自录制）");
+    } else if (fetched.length) {
+      setHint("会话 " + sessionLabel(id) + " 已在当前缓冲区中");
+    } else {
+      setHint("没有找到 " + sessionLabel(id) + " 的录制帧（可能已过保留期）");
+    }
+  }
+
+  function ensureSelectedSessionLoaded() {
+    const id = state.session;
+    if (!id || id === "__none__") { setHint(""); return; }
+    const meta = state.sessions[id];
+    if (!meta) return;
+    const have = state.frames.reduce((n, f) => n + (f.session === id ? 1 : 0), 0);
+    const expected = meta.count || 0;
+    if (have > 0 && (loadedSessions.has(id) || have >= expected)) return;
+    if (have === 0) loadedSessions.delete(id);
+    if (loadedSessions.has(id)) return;
+    loadRecordedSession(meta);
   }
 
   // ---------- 阶段识别 ----------
@@ -633,6 +739,9 @@
       if (msg.type === "logs_hello") {
         const payload = msg.payload || {};
         state.recording = payload.recording || null;
+        loadToken++;
+        loadedSessions.clear();
+        setHint("");
         buildSources(payload.sources);
         buildSessionOptions(payload.sessions || []);
         if (wantSession) {
@@ -651,6 +760,9 @@
         updateStats();
         updateJumpHint();
         document.getElementById("connInfo").textContent = connInfoText(payload);
+        if (state.session && state.session !== "__none__") {
+          setTimeout(ensureSelectedSessionLoaded, 50);
+        }
         return;
       }
       if (msg.source) enqueue(msg);
@@ -703,6 +815,8 @@
   sessSel.addEventListener("change", () => {
     state.session = sessSel.value;
     rerender();
+    if (!state.session || state.session === "__none__") setHint("");
+    else ensureSelectedSessionLoaded();
   });
 
   groupBtn.addEventListener("click", () => {
@@ -728,8 +842,11 @@
   });
 
   document.getElementById("clearBtn").addEventListener("click", () => {
+    loadToken++;
+    loadedSessions.clear();
     state.frames = [];
     state.total = 0;
+    setHint("");
     rerender();
   });
 

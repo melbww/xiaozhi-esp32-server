@@ -29,6 +29,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from functools import partial
 from http import HTTPStatus
@@ -390,6 +391,86 @@ class LogRecorder:
             out.append({"date": day_dir.name, "files": files})
         return out
 
+    def session_index(self, sources: set[str]) -> dict[str, dict]:
+        """Aggregate session metadata from the recorded frames.
+
+        The live ``_session_meta`` only knows what happened since startup (and
+        only the last ``replay_recent`` frames). This scan lets the dropdown
+        list every session still inside the recording retention window, while
+        frames are only loaded when the user actually selects one.
+
+        Only sources with a session rule are scanned; the web log has no
+        sessions and is far too chatty to walk on every startup.
+        """
+        result: dict[str, dict] = {}
+        try:
+            days = sorted(
+                (p for p in self.dir.iterdir() if p.is_dir() and _is_day_dir(p.name))
+            )
+        except OSError:
+            return result
+
+        for day_dir in days:
+            for source in sources:
+                for path in _source_files(day_dir, source):
+                    try:
+                        handle = path.open("r", encoding="utf-8", errors="replace")
+                    except OSError:
+                        continue
+                    with handle:
+                        for line in handle:
+                            if '"session"' not in line:
+                                continue
+                            try:
+                                frame = json.loads(line)
+                            except (ValueError, TypeError):
+                                continue
+                            session_id = frame.get("session")
+                            if not session_id:
+                                continue
+                            ts = frame.get("ts")
+                            meta = result.get(session_id)
+                            if meta is None:
+                                result[session_id] = {
+                                    "id": session_id,
+                                    "source": frame.get("source") or source,
+                                    "device": frame.get("device"),
+                                    "first": ts,
+                                    "last": ts,
+                                    "count": 1,
+                                }
+                            else:
+                                if ts is not None:
+                                    if meta.get("first") is None or ts < meta["first"]:
+                                        meta["first"] = ts
+                                    if meta.get("last") is None or ts > meta["last"]:
+                                        meta["last"] = ts
+                                meta["count"] = meta.get("count", 0) + 1
+                                if frame.get("device"):
+                                    meta["device"] = frame["device"]
+        return result
+
+
+def _source_files(day_dir: Path, source: str) -> list[Path]:
+    """Recordings for one source on one day, oldest first (rotation-aware)."""
+    try:
+        files = [
+            path
+            for path in day_dir.glob(f"{source}*.jsonl")
+            if path.is_file()
+            and (path.name == f"{source}.jsonl" or path.name.startswith(f"{source}."))
+        ]
+    except OSError:
+        return []
+    return sorted(files, key=lambda path: (_file_mtime(path), path.name))
+
+
+def _file_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
 
 def _is_day_dir(name: str) -> bool:
     try:
@@ -410,6 +491,16 @@ def _frame_ts(line: str) -> float:
         return float(frame.get("ts") or 0)
     except (ValueError, TypeError):
         return 0.0
+
+
+def _min_ts(a: float | None, b: float | None) -> float | None:
+    values = [value for value in (a, b) if isinstance(value, (int, float))]
+    return min(values) if values else None
+
+
+def _max_ts(a: float | None, b: float | None) -> float | None:
+    values = [value for value in (a, b) if isinstance(value, (int, float))]
+    return max(values) if values else None
 
 
 def _tail_lines(path: Path, limit: int, max_bytes: int = 512 * 1024) -> list[str]:
@@ -487,6 +578,12 @@ class LogStreamer:
             self._recent = recorder.replay(min(replay_recent, history))
             for payload in self._recent:
                 self._note_session(payload)
+
+        # The replay window is small and shared with chatty sources (web), so it
+        # usually only knows the last server session. Backfill the dropdown from
+        # the recordings; frames are lazy-loaded when a session is selected.
+        if recorder is not None:
+            self._merge_sessions(recorder.session_index(set(self._rules)))
 
     # ---- lifecycle ----
     def start(self) -> None:
@@ -620,6 +717,27 @@ class LogStreamer:
             meta["count"] += 1
             if frame.get("device"):
                 meta["device"] = frame["device"]
+
+    def _merge_sessions(self, index: dict[str, dict]) -> None:
+        """Merge recording-derived metadata into the live session map."""
+        with self._lock:
+            for session_id, found in index.items():
+                meta = self._session_meta.get(session_id)
+                if meta is None:
+                    self._session_meta[session_id] = dict(found)
+                    continue
+                meta["first"] = _min_ts(meta.get("first"), found.get("first"))
+                meta["last"] = _max_ts(meta.get("last"), found.get("last"))
+                meta["count"] = max(meta.get("count") or 0, found.get("count") or 0)
+                if found.get("device"):
+                    meta["device"] = found["device"]
+                if found.get("source") and not meta.get("source"):
+                    meta["source"] = found["source"]
+            while len(self._session_meta) > 200:
+                oldest = min(
+                    self._session_meta.values(), key=lambda m: m.get("last") or 0
+                )
+                self._session_meta.pop(oldest["id"], None)
 
     # ---- publish ----
     def _publish(self, name: str, level: str, line: str) -> None:
@@ -977,27 +1095,36 @@ class LogViewerHandler(SimpleHTTPRequestHandler):
             limit = 2000
         wanted = query.get("session", "").strip()
 
-        files = sorted(
-            file
-            for file in (recorder.dir / day).glob(f"{source}*.jsonl")
-            if file.name == f"{source}.jsonl" or file.name.startswith(f"{source}.")
-        )
-        lines: list[str] = []
-        for file in files:
-            lines.extend(_tail_lines(file, limit))
+        files = _source_files(recorder.dir / day, source)
         if wanted:
-            kept = []
-            for line in lines:
+            # A historical session may be anywhere in the file, not just in the
+            # tail. Walk the day's recording and keep the last `limit` matches.
+            kept: deque[str] = deque(maxlen=limit)
+            for file in files:
                 try:
-                    frame = json.loads(line)
-                except ValueError:
+                    handle = file.open("r", encoding="utf-8", errors="replace")
+                except OSError:
                     continue
-                if wanted == "__none__":
-                    if not frame.get("session"):
-                        kept.append(line)
-                elif frame.get("session") == wanted:
-                    kept.append(line)
-            lines = kept
+                with handle:
+                    for line in handle:
+                        if wanted != "__none__" and wanted not in line:
+                            continue
+                        try:
+                            frame = json.loads(line)
+                        except (ValueError, TypeError):
+                            continue
+                        session = frame.get("session")
+                        if wanted == "__none__":
+                            if session:
+                                continue
+                        elif session != wanted:
+                            continue
+                        kept.append(line.rstrip("\r\n"))
+            lines = list(kept)
+        else:
+            lines = []
+            for file in files:
+                lines.extend(_tail_lines(file, limit))
         self._send_text("\n".join(lines[-limit:]) + ("\n" if lines else ""), "application/x-ndjson")
 
     # ---- websocket plumbing ----

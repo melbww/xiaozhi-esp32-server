@@ -94,7 +94,7 @@ LOG_VIEWER_PORT=8010 my_explorations/log-viewer/log-viewer.sh start
 | `dir` | `logs` | 相对路径以**本目录**为基准，也可写绝对路径 |
 | `retention_days` | `14` | 保留天数，启动时和每小时清理更老的日期目录 |
 | `max_file_mb` | `64` | 单文件上限，超过后把 `server.jsonl` 改名为 `server.<HHMMSS>.jsonl` 继续写 |
-| `replay_recent` | `200` | 启动时从录制文件回填多少帧到页面（方便重启后仍能看到刚才的日志） |
+| `replay_recent` | `200` | 启动时从录制文件回填多少帧到页面（方便重启后仍能看到刚才的日志；会话下拉的历史会话另由索引扫描提供，不依赖这个值） |
 
 文件布局是 `<dir>/<YYYY-MM-DD>/<source>.jsonl`，一行一个 JSON，字段与推给浏览器的帧
 完全一致（`source` / `level` / `line` / `ts` / `session` / `device`），所以既能回放也能直接查：
@@ -145,6 +145,8 @@ python3 my_explorations/log-viewer/log_viewer.py --list-sources
 - 源过滤（按 `sources.json` 动态生成）、级别过滤（DEBUG/INFO/WARN/ERROR）
 - 阶段过滤：`VAD / ASR / LLM / TTS / HTTP / MCP / WAKE / SYS`（按行内容自动分类）
 - **会话过滤**：`全部 / 未归属 / #<session_id>`，下拉里带会话**开始时间**（`MM-DD HH:MM:SS`）和设备 MAC
+  - 下拉列表启动时会扫描录制文件，回填**保留期内见过的所有会话**，不再只限 `replay_recent` 那几帧
+  - 选中一个不在当前页面缓冲区里的历史会话时，会按需从 `/api/recordings/...` 加载它的帧（不会一次性把全部录制塞进页面）
 - **会话分组**：同一会话的行折叠成一块，块头显示行数、时间范围、设备；点块头折叠/展开
 - 关键字搜索、暂停、清屏、超长行点击展开
 - **拍照缩略图**：`PHOTO /photos/...` 行**左侧**显示原图缩略图，点击在新标签打开原图；缩略图固定 176×99（16:9），图片加载不会改变行高，不会打断自动滚动
@@ -164,7 +166,7 @@ python3 my_explorations/log-viewer/log_viewer.py --list-sources
 | `/logs-ws` | 日志推送 WebSocket（hello 帧带 `sources` / `sessions` / `recording`） |
 | `/api/sources` | 源列表 + 连接状态 / 行数 / 最后一行时间 + 已知会话 |
 | `/api/recordings` | 录制目录、保留天数、按天列出文件 |
-| `/api/recordings/<date>/<source>?limit=2000&session=<id>` | 读取某个源某天的录制（ndjson） |
+| `/api/recordings/<date>/<source>?limit=2000&session=<id>` | 读取某个源某天的录制（ndjson）；带 `session` 时会扫描当天整个文件，而不是只看尾部 |
 | `/photos/<date>/<file>` | 查看机器人拍照保存的 JPEG（见下） |
 | `/health` | `{"status":"ok","sources":[...],"recording":{...}}` |
 
@@ -206,7 +208,7 @@ PHOTO /photos/2026-11-14/16-56-22-e836ac65.jpg
 | 端口被占 | `LOG_VIEWER_PORT=8008 ... start` |
 | 面板没反应 | `my_explorations/log-viewer/log-viewer.sh logs` |
 | 录制没文件 | 确认 `record.enabled=true`；启动日志里有 `recording : <dir>` 一行 |
-| 会话下拉是空的 | 该源没配 `session`，或还没出现过带 `session_id` 的行（设备连一次即可） |
+| 会话下拉是空的 | 该源没配 `session`；录制里还没有带 `session_id` 的帧；或会话已超过 `retention_days` 保留期 |
 | 磁盘占用大 | 调小 `retention_days` / `max_file_mb`，删掉旧的日期目录即可 |
 
 ## 与其他目录的边界
