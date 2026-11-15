@@ -138,6 +138,7 @@
   .txt.stage-ASRRAW { color: #56d364; font-weight: 600; }
   .txt.stage-LLM  { color: #ffa657; }
   .txt.stage-TTS  { color: #d2a8ff; }
+  .txt.stage-MEM  { color: #56d4dd; font-weight: 600; }
   .txt.stage-HTTP { color: #8b949e; }
   .txt.stage-ERROR { color: #f85149; }
   .txt.stage-WARN  { color: #d29922; }
@@ -211,6 +212,7 @@
     <button class="chip on" data-stage="ASR">ASR</button>
     <button class="chip on" data-stage="LLM">LLM</button>
     <button class="chip on" data-stage="TTS">TTS</button>
+    <button class="chip on" data-stage="MEM">MEM</button>
     <button class="chip on" data-stage="HTTP">HTTP</button>
     <button class="chip on" data-stage="MCP">MCP</button>
     <button class="chip on" data-stage="WAKE">WAKE</button>
@@ -234,7 +236,7 @@
 <button id="jumpBottom" title="跳到最新日志并恢复自动滚动">⬇ 最新</button>
 <footer>
   <span id="connInfo"></span>
-  <span id="hint">提示: 说话后 [VAD]→[ASR]→[ASR][RAW]→[LLM]→[TTS] 会实时出现在这里</span>
+  <span id="hint">提示: 说话后 [VAD]→[ASR]→[ASR][RAW]→[LLM]→[TTS]; 断开后 [MEM] 出现总结与记忆写入</span>
 </footer>
 
 <script>
@@ -251,7 +253,7 @@
     ws: null,
     sources: {},
     levels: { debug: true, info: true, warn: true, error: true },
-    stages: { ALL: true, VAD: true, ASR: true, LLM: true, TTS: true, HTTP: true, MCP: true, WAKE: true, SYS: true },
+    stages: { ALL: true, VAD: true, ASR: true, LLM: true, TTS: true, MEM: true, HTTP: true, MCP: true, WAKE: true, SYS: true },
     session: "",          // "" = 全部, "__none__" = 未归属, 否则是 session_id
     grouped: false,       // 按会话分块显示
     paused: false,
@@ -739,6 +741,7 @@
     if (/\[ASR\]\[RAW\]/.test(line)) return "ASRRAW";
     if (/\[VAD\]/.test(line)) return "VAD";
     if (/\[ASR\]|识别文本|识别语言|识别情绪|识别说话人/.test(line)) return "ASR";
+    if (/聊天记录总结|记忆总结|总结记忆|summaryMemory|saveMemory|Save memory|初始化组件: memory|MemoryProvider|记忆保存模型/.test(line)) return "MEM";
     if (/LLM 请求|LLM 响应|LLM 工具调用|大模型收到用户消息|Token 消耗|chat\/completions/.test(line)) return "LLM";
     if (/TTS|语音生成成功|发送音频消息|发送第一段语音/.test(line)) return "TTS";
     if (/HTTP Request|connection (rejected|open)|server listening|Websocket地址/.test(line)) return "HTTP";

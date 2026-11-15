@@ -70,6 +70,13 @@ LOG_VIEWER_PORT=8010 my_explorations/log-viewer/log-viewer.sh start
         "sticky": true
       }
     },
+    {
+      "name": "web", "kind": "docker", "target": "xiaozhi-esp32-server-web", "tail": 20,
+      "session": {
+        "id": "会话\\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\s*的聊天记录总结",
+        "sticky": false
+      }
+    },
     { "name": "runtime", "kind": "file", "target": "main/digital-human/wakeword_runtime/logs/wakeword-runtime.log" }
   ]
 }
@@ -149,6 +156,12 @@ grep -h '识别文本' my_explorations/log-viewer/logs/*/server.jsonl
 > 全局行可能被算到最近那个会话里。这时把 `sticky` 设为 `false`，只标记明确带
 > `session_id` 的行。
 
+`web` 源就是一个 `sticky: false` 的例子：manager-api 的总结日志自带会话 id
+（`开始生成会话 <uuid> 的聊天记录总结` / `成功保存会话 <uuid> … 到智能体`），
+用正则把 uuid 抠出来即可。这样**断线之后的总结、写入记忆**也会挂在同一会话下，
+和 `server` 源的 VAD/ASR/LLM/TTS 行一起看。注意 `sticky` 必须为 `false` ——
+智控台的调度/DEBUG 行太多，粘滞会把它们全部算给最后一个会话。
+
 检查解析结果：
 
 ```sh
@@ -158,7 +171,8 @@ python3 my_explorations/log-viewer/log_viewer.py --list-sources
 ## 页面能力
 
 - 源过滤（按 `sources.json` 动态生成）、级别过滤（DEBUG/INFO/WARN/ERROR）
-- 阶段过滤：`VAD / ASR / LLM / TTS / HTTP / MCP / WAKE / SYS`（按行内容自动分类）
+- 阶段过滤：`VAD / ASR / LLM / TTS / MEM / HTTP / MCP / WAKE / SYS`（按行内容自动分类）
+  - `MEM` = 记忆线：连接时的 `初始化组件: memory成功 …`、断线后的 `聊天记录总结`、`Save memory successful`、`summaryMemory` / `saveMemory`
 - **会话过滤**：`全部 / 未归属 / #<session_id>`，下拉里带会话**开始时间**（`MM-DD HH:MM:SS`）和设备 MAC
   - 下拉列表启动时会扫描录制文件，回填**保留期内见过的所有会话**，不再只限 `replay_recent` 那几帧
   - 选中一个不在当前页面缓冲区里的历史会话时，会按需从 `/api/recordings/...` 加载它的帧（不会一次性把全部录制塞进页面）
