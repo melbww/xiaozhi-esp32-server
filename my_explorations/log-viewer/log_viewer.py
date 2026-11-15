@@ -72,6 +72,11 @@ DEFAULT_RECORD = {
     "retention_days": 14,
     "max_file_mb": 64,
     "replay_recent": 200,
+    # What happens to a day directory once it falls out of the retention
+    # window: "delete" (rmtree), "archive" (move under _archive) or "keep"
+    # (never touch it again; the UI already ignores non-YYYY-MM-DD dirs).
+    "prune_mode": "archive",
+    "archive_dir": "_archive",
 }
 
 
@@ -145,6 +150,22 @@ def load_sources(
     record["max_file_mb"] = max(int(record.get("max_file_mb", 64)), 1)
     record["replay_recent"] = max(int(record.get("replay_recent", 200)), 0)
     record["dir"] = str(record.get("dir") or "logs")
+
+    prune_mode = str(record.get("prune_mode") or "delete").strip().lower()
+    if prune_mode in {"off", "none", "ignore"}:
+        prune_mode = "keep"
+    if prune_mode not in {"delete", "archive", "keep"}:
+        raise SystemExit("record.prune_mode must be delete, archive or keep")
+    record["prune_mode"] = prune_mode
+
+    archive_dir = str(record.get("archive_dir") or "_archive").strip().strip("/")
+    if not archive_dir or archive_dir in {".", ".."} or "/" in archive_dir:
+        raise SystemExit("record.archive_dir must be a single directory name")
+    if _is_day_dir(archive_dir):
+        # The prune sweep looks for YYYY-MM-DD dirs; naming the archive like
+        # one would make the archived days get pruned again.
+        raise SystemExit("record.archive_dir must not look like YYYY-MM-DD")
+    record["archive_dir"] = archive_dir
 
     sources: list[SourceSpec] = []
     seen: set[str] = set()
@@ -242,7 +263,11 @@ class LogRecorder:
         jq -c 'select(.session=="<id>")' logs/2026-11-13/server.jsonl
 
     Files rotate on size (``max_file_mb``) and directories older than
-    ``retention_days`` are pruned, so this cannot grow without bound.
+    ``retention_days`` leave the live tree, so this cannot grow without bound.
+    ``prune_mode`` decides how they leave: ``delete`` (gone), ``archive``
+    (moved under ``archive_dir``, so it stays on disk but drops out of the
+    reader APIs, which only glob ``YYYY-MM-DD`` dirs) or ``keep`` (untouched,
+    still visible, disk unbounded).
     """
 
     def __init__(
@@ -250,10 +275,14 @@ class LogRecorder:
         directory: Path,
         retention_days: int = 14,
         max_file_mb: int = 64,
+        prune_mode: str = "delete",
+        archive_dir: str = "_archive",
     ) -> None:
         self.dir = Path(directory).expanduser().resolve()
         self.retention_days = retention_days
         self.max_bytes = max_file_mb * 1024 * 1024
+        self.prune_mode = prune_mode
+        self.archive_root = self.dir / archive_dir
         self._lock = threading.Lock()
         self._handles: dict[tuple[str, str], TextIO] = {}
         self._written: dict[tuple[str, str], int] = {}
@@ -324,20 +353,57 @@ class LogRecorder:
 
     def prune_locked(self) -> None:
         self._last_prune = time.time()
+        if self.prune_mode == "keep":
+            return
         cutoff = time.time() - self.retention_days * 86400
         try:
             entries = list(self.dir.iterdir())
         except OSError:
             return
         for entry in entries:
-            if not entry.is_dir():
+            if not entry.is_dir() or not _is_day_dir(entry.name):
                 continue
             try:
                 day_ts = time.mktime(time.strptime(entry.name, "%Y-%m-%d"))
             except ValueError:
                 continue
-            if day_ts + 86400 < cutoff:
+            if day_ts + 86400 >= cutoff:
+                continue
+            if self.prune_mode == "archive":
+                self._archive_locked(entry)
+            else:
                 shutil.rmtree(entry, ignore_errors=True)
+                print(f"[record] pruned {entry.name}", flush=True)
+
+    def _archive_locked(self, day_dir: Path) -> None:
+        """Move one expired day directory under ``archive_dir``.
+
+        ``archive_dir`` is not a ``YYYY-MM-DD`` name, so the sweep above never
+        revisits it and the reader APIs (which only list day dirs) skip it:
+        the data is still on disk but leaves the UI's scope.
+        """
+        target = self.archive_root / day_dir.name
+        try:
+            self.archive_root.mkdir(parents=True, exist_ok=True)
+            if not target.exists():
+                os.replace(day_dir, target)
+            else:
+                # A duplicate day could only come from a manual copy; merge
+                # instead of losing either side.
+                target.mkdir(parents=True, exist_ok=True)
+                stamp = time.strftime("%H%M%S")
+                for path in day_dir.iterdir():
+                    dest = target / path.name
+                    if dest.exists():
+                        dest = target / f"{path.stem}-{stamp}{path.suffix}"
+                    os.replace(path, dest)
+                day_dir.rmdir()
+            print(f"[record] archived {day_dir.name} -> {target}", flush=True)
+        except OSError as exc:
+            print(
+                f"[record] archive failed for {day_dir.name}: {exc}",
+                flush=True,
+            )
 
     # ---- reading back ----
     def replay(self, limit: int) -> list[str]:
@@ -654,6 +720,7 @@ class LogStreamer:
             "enabled": True,
             "dir": str(self.recorder.dir),
             "retention_days": self.recorder.retention_days,
+            "prune_mode": self.recorder.prune_mode,
             "max_file_mb": self.recorder.max_bytes // (1024 * 1024),
         }
 
@@ -1064,6 +1131,7 @@ class LogViewerHandler(SimpleHTTPRequestHandler):
                 "enabled": True,
                 "dir": str(recorder.dir),
                 "retention_days": recorder.retention_days,
+                "prune_mode": recorder.prune_mode,
                 "days": recorder.stats(),
             }
         )
@@ -1327,6 +1395,8 @@ def main(argv: list[str] | None = None) -> int:
             record_dir,
             retention_days=record["retention_days"],
             max_file_mb=record["max_file_mb"],
+            prune_mode=record["prune_mode"],
+            archive_dir=record["archive_dir"],
         )
 
     streamer = LogStreamer(
@@ -1351,7 +1421,7 @@ def main(argv: list[str] | None = None) -> int:
     if recorder is not None:
         print(
             f"recording  : {recorder.dir} (keep {record['retention_days']}d, "
-            f"rotate {record['max_file_mb']}MB)",
+            f"{record['prune_mode']}, rotate {record['max_file_mb']}MB)",
             flush=True,
         )
     else:

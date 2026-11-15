@@ -92,9 +92,24 @@ LOG_VIEWER_PORT=8010 my_explorations/log-viewer/log-viewer.sh start
 |---|---|---|
 | `enabled` | `false` | 是否把每一帧写到磁盘 |
 | `dir` | `logs` | 相对路径以**本目录**为基准，也可写绝对路径 |
-| `retention_days` | `14` | 保留天数，启动时和每小时清理更老的日期目录 |
+| `retention_days` | `14` | 保留天数；更老的日期目录交给 `prune_mode` 处理（启动时 + 每小时一次） |
+| `prune_mode` | `delete` | 过期日期目录怎么处理：`delete` 直接删；`archive` 移到 `archive_dir`；`keep` 什么也不做 |
+| `archive_dir` | `_archive` | `prune_mode=archive` 时的归档目录名（相对 `dir`；不能写成 `YYYY-MM-DD`，否则会被再次扫到） |
 | `max_file_mb` | `64` | 单文件上限，超过后把 `server.jsonl` 改名为 `server.<HHMMSS>.jsonl` 继续写 |
 | `replay_recent` | `200` | 启动时从录制文件回填多少帧到页面（方便重启后仍能看到刚才的日志；会话下拉的历史会话另由索引扫描提供，不依赖这个值） |
+
+`prune_mode` 的三种语义：
+
+- `delete`（默认）：`shutil.rmtree`，磁盘真的释放，**不可恢复**。
+- `archive`：把整个日期目录移到 `<dir>/_archive/<YYYY-MM-DD>/`。页面、`/api/recordings`、
+  会话索引都只认 `YYYY-MM-DD` 目录，而 `_archive` 不是，所以归档数据**自动退出加载范围**
+  （软删除），但仍留在磁盘上，可以用 `jq` / `grep` 直接查，也可以手动搬回来。
+  归档目录本身不再参与清理，需要长期保存时自己管控它的体积。
+- `keep`：过期目录原地不动、不删，**页面照样能看到它们**（仍然是日期目录），
+  磁盘一直增长 —— 它只是「不清理」，不是「保留策略」。
+
+> 「只把旧目录排除出加载范围、不删也不搬」这件事本身不成立：视图过滤不释放磁盘。
+> 想两者兼得就用 `archive`（移出加载范围 + 仍在盘上）；想长期留就调大 `retention_days` 或归档后冷备。
 
 文件布局是 `<dir>/<YYYY-MM-DD>/<source>.jsonl`，一行一个 JSON，字段与推给浏览器的帧
 完全一致（`source` / `level` / `line` / `ts` / `session` / `device`），所以既能回放也能直接查：
