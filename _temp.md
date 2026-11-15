@@ -23,3 +23,14 @@ mem0ai
 Memory_powermem
 PowerMem记忆
 powermem
+
+---
+help me draw a architecture diagram in excalidraw to illustrate the whole system, like the webconsole consle, docker, sql database, and whatever related; also add read along text in the diagram to make it self explanatory
+---
+| Traffic | Store | Volume character |
+|---|---|---|
+| Agent/model/timbre config | MySQL | fixed size, rare writes |
+| Chat history / audio | MySQL | **grows without bound**, every turn |
+| `last_connected_at`, `app_version` | MySQL | one row per device, every session |
+| Captcha, SMS counters, activation codes, OTA handles, device-count cache | Redis | fixed/bounded, expires away |
+| dict/model-name/timbre caches | Redis | fixed size, invalidated on edit |
