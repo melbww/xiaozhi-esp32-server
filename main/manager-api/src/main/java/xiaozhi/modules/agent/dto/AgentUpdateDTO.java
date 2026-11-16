@@ -69,11 +69,11 @@ public class AgentUpdateDTO implements Serializable {
     @Schema(description = "插件函数信息", nullable = true)
     private List<FunctionInfo> functions;
 
-    @Schema(description = "角色设定参数", example = "你是一个专业的客服助手，负责回答用户问题并提供帮助", nullable = true)
+    @Schema(description = "角色设定参数", example = "You are a professional customer service assistant who answers user questions and provides help", nullable = true)
     private String systemPrompt;
 
-    @Schema(description = "总结记忆", example = "构建可生长的动态记忆网络，在有限空间内保留关键信息的同时，智能维护信息演变轨迹\n"
-            + "根据对话记录，总结user的重要信息，以便在未来的对话中提供更个性化的服务", nullable = true)
+    @Schema(description = "总结记忆", example = "Build a growable, dynamic memory network that keeps key information within limited space while intelligently maintaining the evolution trail of that information\n"
+            + "Based on the conversation record, summarize the user's important information so that future conversations can be more personalized", nullable = true)
     private String summaryMemory;
 
     @Schema(description = "聊天记录配置（0不记录 1仅记录文本 2记录文本和语音）", example = "3", nullable = true)

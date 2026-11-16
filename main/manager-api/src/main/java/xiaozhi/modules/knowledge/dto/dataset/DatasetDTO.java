@@ -214,7 +214,7 @@ public class DatasetDTO {
         @JsonProperty("max_cluster")
         private Integer maxCluster;
 
-        @Schema(description = "自定义提示词", example = "请总结以下内容...")
+        @Schema(description = "自定义提示词", example = "Please summarize the following content...")
         private String prompt;
     }
 

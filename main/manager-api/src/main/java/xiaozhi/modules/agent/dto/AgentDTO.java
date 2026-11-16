@@ -35,11 +35,11 @@ public class AgentDTO {
     @Schema(description = "记忆模型ID", example = "mem_model_01")
     private String memModelId;
 
-    @Schema(description = "角色设定参数", example = "你是一个专业的客服助手，负责回答用户问题并提供帮助")
+    @Schema(description = "角色设定参数", example = "You are a professional customer service assistant who answers user questions and provides help")
     private String systemPrompt;
 
-    @Schema(description = "总结记忆", example = "构建可生长的动态记忆网络，在有限空间内保留关键信息的同时，智能维护信息演变轨迹\n" +
-            "根据对话记录，总结user的重要信息，以便在未来的对话中提供更个性化的服务", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(description = "总结记忆", example = "Build a growable, dynamic memory network that keeps key information within limited space while intelligently maintaining the evolution trail of that information\n" +
+            "Based on the conversation record, summarize the user's important information so that future conversations can be more personalized", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String summaryMemory;
 
     @Schema(description = "最后连接时间", example = "2024-03-20 10:00:00")

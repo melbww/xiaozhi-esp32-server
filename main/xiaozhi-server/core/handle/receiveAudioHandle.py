@@ -141,14 +141,14 @@ async def no_voice_close_connect(conn: "ConnectionHandler", have_voice):
                 return
             prompt = end_prompt.get("prompt")
             if not prompt:
-                prompt = "请你以```时间过得真快```未来头，用富有感情、依依不舍的话来结束这场对话吧。！"
+                prompt = "Start your reply with ```time really flies``` and end this conversation with warm, affectionate, and reluctant-to-part words!"
             await startToChat(conn, prompt)
 
 
 async def max_out_size(conn: "ConnectionHandler"):
     # 播放超出最大输出字数的提示
     conn.client_abort = False
-    text = "不好意思，我现在有点事情要忙，明天这个时候我们再聊，约好了哦！明天不见不散，拜拜！"
+    text = "Sorry, I have something to take care of right now. Let's talk again at this time tomorrow, promise! See you tomorrow, bye bye!"
     await send_stt_message(conn, text)
     file_path = "config/assets/max_output_size.wav"
     opus_packets = await audio_to_data(file_path)
@@ -161,11 +161,11 @@ async def check_bind_device(conn: "ConnectionHandler"):
         # 确保bind_code是6位数字
         if len(conn.bind_code) != 6:
             conn.logger.bind(tag=TAG).error(f"无效的绑定码格式: {conn.bind_code}")
-            text = "绑定码格式错误，请检查配置。"
+            text = "The binding code format is incorrect. Please check the configuration."
             await send_stt_message(conn, text)
             return
 
-        text = f"请登录控制面板，输入{conn.bind_code}，绑定设备。"
+        text = f"Please log in to the control panel and enter {conn.bind_code} to bind the device."
         await send_stt_message(conn, text)
 
         # 播放提示音
@@ -187,7 +187,7 @@ async def check_bind_device(conn: "ConnectionHandler"):
     else:
         # 播放未绑定提示
         conn.client_abort = False
-        text = f"没有找到该设备的版本信息，请正确配置 OTA地址，然后重新编译固件。"
+        text = f"No version information was found for this device. Please configure the OTA address correctly, then recompile the firmware."
         await send_stt_message(conn, text)
         music_path = "config/assets/bind_not_found.wav"
         opus_packets = await audio_to_data(music_path)

@@ -23,9 +23,9 @@ class TTSPerformanceTester:
         self.test_sentences = self.config.get("module_test", {}).get(
             "test_sentences",
             [
-                "永和九年，岁在癸丑，暮春之初；",
-                "夫人之相与，俯仰一世，或取诸怀抱，悟言一室之内；或因寄所托，放浪形骸之外。虽趣舍万殊，静躁不同，",
-                "每览昔人兴感之由，若合一契，未尝不临文嗟悼，不能喻之于怀。固知一死生为虚诞，齐彭殇为妄作。",
+                "It was the ninth year of Yonghe, the year of Guichou, in the early days of late spring.",
+                "People of this age hold differing views; some confide their innermost feelings while gathered in one room, others give free rein to their nature and let their bodies roam beyond bounds.",
+                "Whenever I reflect on the reasons the people of old were moved, it always resonates with me, as if the same feeling were sealed in both hearts.",
             ],
         )
         self.results = {}
@@ -64,7 +64,7 @@ class TTSPerformanceTester:
 
             # 连接测试
             tmp_file = tts.generate_filename()
-            await tts.text_to_speak("连接测试", tmp_file)
+            await tts.text_to_speak("Connection test", tmp_file)
 
             if not tmp_file or not os.path.exists(tmp_file):
                 print(f"{tts_name} 连接失败")

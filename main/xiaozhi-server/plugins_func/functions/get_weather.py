@@ -17,20 +17,20 @@ GET_WEATHER_FUNCTION_DESC = {
     "function": {
         "name": "get_weather",
         "description": (
-            "获取某个地点的天气，用户应提供一个位置，比如用户说杭州天气，参数为：杭州。"
-            "如果用户说的是省份，默认用省会城市。如果用户说的不是省份或城市而是一个地名，默认用该地所在省份的省会城市。"
-            "重要：本地未来7天天气已在上下文中提供，用户未指明其他城市时绝对不要调用此工具。"
+            "Get the weather for a location. The user should provide a place; for example, if the user says 'weather in Hangzhou', the parameter is: Hangzhou. "
+            "If the user names a province, use its capital city by default. If the user gives a place name that is not a province or city, use the capital city of the province that place is in by default. "
+            "Important: the local 7-day weather forecast is already provided in the context; never call this tool unless the user names a different city."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "location": {
                     "type": "string",
-                    "description": "地点名，例如杭州。可选参数，如果不提供则不传",
+                    "description": "Location name, e.g. Hangzhou. Optional; omit it if not provided",
                 },
                 "lang": {
                     "type": "string",
-                    "description": "返回用户使用的语言code，例如zh_CN/zh_HK/en_US/ja_JP等，默认zh_CN",
+                    "description": "The language code to reply to the user in, e.g. zh_CN/zh_HK/en_US/ja_JP; defaults to zh_CN",
                 },
             },
             "required": ["lang"],
@@ -178,34 +178,34 @@ async def fetch_weather_data(city_info, api_key, api_host):
 
 
 def build_weather_report(city_info, now_data, daily_data):
-    city_name = city_info.get("name") or city_info.get("adm2") or "未知位置"
+    city_name = city_info.get("name") or city_info.get("adm2") or "unknown location"
     now = now_data.get("now", {})
-    weather_report = f"您查询的位置是：{city_name}\n\n"
-    weather_report += f"当前天气: {now.get('text', '未知')}\n"
+    weather_report = f"The location you asked about is: {city_name}\n\n"
+    weather_report += f"Current weather: {now.get('text', 'unknown')}\n"
 
     current_basic = {
-        "温度": f"{now['temp']}℃" if now.get("temp") is not None else None,
-        "体感温度": f"{now['feelsLike']}℃" if now.get("feelsLike") is not None else None,
-        "湿度": f"{now['humidity']}%" if now.get("humidity") is not None else None,
-        "风向": now.get("windDir"),
-        "风力": now.get("windScale"),
-        "能见度": f"{now['vis']}公里" if now.get("vis") is not None else None,
-        "气压": f"{now['pressure']}百帕" if now.get("pressure") is not None else None,
-        "降水量": f"{now['precip']}毫米" if now.get("precip") is not None else None,
+        "Temperature": f"{now['temp']}℃" if now.get("temp") is not None else None,
+        "Feels like": f"{now['feelsLike']}℃" if now.get("feelsLike") is not None else None,
+        "Humidity": f"{now['humidity']}%" if now.get("humidity") is not None else None,
+        "Wind direction": now.get("windDir"),
+        "Wind scale": now.get("windScale"),
+        "Visibility": f"{now['vis']}km" if now.get("vis") is not None else None,
+        "Pressure": f"{now['pressure']}hPa" if now.get("pressure") is not None else None,
+        "Precipitation": f"{now['precip']}mm" if now.get("precip") is not None else None,
     }
     current_basic = {key: value for key, value in current_basic.items() if value}
     if current_basic:
-        weather_report += "详细参数：\n"
+        weather_report += "Detailed parameters:\n"
         weather_report += "".join(f"  · {key}: {value}\n" for key, value in current_basic.items())
 
-    weather_report += "\n未来7天预报：\n"
+    weather_report += "\n7-day forecast:\n"
     for item in daily_data.get("daily", [])[:7]:
-        date = item.get("fxDate", "未知日期")
-        weather = item.get("textDay") or WEATHER_CODE_MAP.get(item.get("iconDay"), "未知")
-        high = item.get("tempMax", "未知")
-        low = item.get("tempMin", "未知")
-        weather_report += f"{date}: {weather}，气温 {low}~{high}℃\n"
-    weather_report += "\n（如需某一天的具体天气，请告诉我日期）"
+        date = item.get("fxDate", "unknown date")
+        weather = item.get("textDay") or WEATHER_CODE_MAP.get(item.get("iconDay"), "unknown")
+        high = item.get("tempMax", "unknown")
+        low = item.get("tempMin", "unknown")
+        weather_report += f"{date}: {weather}, temperature {low}~{high}℃\n"
+    weather_report += "\n(Tell me the date if you need the weather for a specific day)"
     return weather_report
 
 
@@ -289,7 +289,7 @@ async def get_weather(conn: "ConnectionHandler", location: str = None, lang: str
     if not city_info:
         return ActionResponse(
             Action.REQLLM,
-            f"暂时查不到 {location} 的天气（城市未找到或天气服务不可用），请稍后再试",
+            f"Weather for {location} is not available right now (city not found or weather service unavailable). Please try again later.",
             None,
         )
     weather_data = await fetch_weather_data(city_info, api_key, api_host)
@@ -299,20 +299,20 @@ async def get_weather(conn: "ConnectionHandler", location: str = None, lang: str
         fx_link = city_info.get("fxLink")
         soup = await fetch_weather_page(fx_link) if fx_link else None
         if not soup:
-            return ActionResponse(Action.REQLLM, None, "请求天气数据失败")
+            return ActionResponse(Action.REQLLM, None, "Failed to request weather data")
         city_name, current_abstract, current_basic, temps_list = parse_weather_info(soup)
-        weather_report = f"您查询的位置是：{city_name}\n\n当前天气: {current_abstract}\n"
+        weather_report = f"The location you asked about is: {city_name}\n\nCurrent weather: {current_abstract}\n"
         if current_basic:
-            weather_report += "详细参数：\n"
+            weather_report += "Detailed parameters:\n"
             weather_report += "".join(
                 f"  · {key}: {value}\n" for key, value in current_basic.items() if value != "0"
             )
-        weather_report += "\n未来7天预报：\n"
+        weather_report += "\n7-day forecast:\n"
         weather_report += "".join(
-            f"{date}: {weather}，气温 {low}~{high}\n"
+            f"{date}: {weather}, temperature {low}~{high}\n"
             for date, weather, high, low in temps_list
         )
-        weather_report += "\n（如需某一天的具体天气，请告诉我日期）"
+        weather_report += "\n(Tell me the date if you need the weather for a specific day)"
 
     # 缓存完整的天气报告
     cache_manager.set(CacheType.WEATHER, weather_cache_key, weather_report)

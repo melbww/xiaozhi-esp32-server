@@ -23,8 +23,8 @@ class AsyncVisionPerformanceTester:
             "../../docs/images/demo2.png",
         ]
         self.test_questions = [
-            "这张图片里有什么？",
-            "请详细描述这张图片的内容",
+            "What is in this picture?",
+            "Please describe the content of this picture in detail",
         ]
 
         # 加载测试图片

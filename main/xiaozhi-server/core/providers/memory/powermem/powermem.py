@@ -251,7 +251,7 @@ class MemoryProvider(MemoryProviderBase):
             if self.enable_user_profile:
                 profile = await self.get_user_profile()
                 if profile:
-                    result_parts.append(f"【用户画像】\n{profile}")
+                    result_parts.append(f"[User Profile]\n{profile}")
 
             # Search memories using PowerMem SDK
             if self.enable_user_profile:
@@ -308,7 +308,7 @@ class MemoryProvider(MemoryProviderBase):
                 # Extract only the formatted strings
                 if memories:
                     memories_str = "\n".join(f"- {memory[1]}" for memory in memories)
-                    result_parts.append(f"【相关记忆】\n{memories_str}")
+                    result_parts.append(f"[Relevant Memories]\n{memories_str}")
 
             final_result = "\n\n".join(result_parts)
             logger.bind(tag=TAG).debug(f"Query results: {final_result}")

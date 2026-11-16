@@ -18,24 +18,24 @@ GET_NEWS_FROM_CHINANEWS_FUNCTION_DESC = {
     "function": {
         "name": "get_news_from_chinanews",
         "description": (
-            "当用户要求查看或收听新闻时调用（如'来条新闻''今天有什么新闻'）。"
-            "用户可以指定新闻类型，如社会新闻、科技新闻、国际新闻等。"
-            "如果没有指定，默认播报社会新闻。"
+            "Call this when the user asks to view or listen to the news (e.g. 'give me a news item', 'what's in the news today'). "
+            "The user may specify a news type, such as social news, tech news, international news, etc. "
+            "If none is specified, social news is broadcast by default."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "category": {
                     "type": "string",
-                    "description": "新闻类别，例如社会、科技、国际。可选参数，如果不提供则使用默认类别",
+                    "description": "News category, e.g. society, technology, world. Optional parameter; if not provided, the default category is used",
                 },
                 "detail": {
                     "type": "boolean",
-                    "description": "是否获取详细内容，默认为false。如果为true，则获取上一条新闻的详细内容",
+                    "description": "Whether to fetch the detailed content; defaults to false. If true, fetches the detailed content of the previous news item",
                 },
                 "lang": {
                     "type": "string",
-                    "description": "返回用户使用的语言code，例如zh_CN/zh_HK/en_US/ja_JP等，默认zh_CN",
+                    "description": "The language code to reply to the user in, e.g. zh_CN/zh_HK/en_US/ja_JP; defaults to zh_CN",
                 },
             },
             "required": ["lang"],
@@ -57,18 +57,18 @@ async def fetch_news_from_rss(rss_url):
         news_items = []
         for item in root.findall(".//item"):
             title = (
-                item.find("title").text if item.find("title") is not None else "无标题"
+                item.find("title").text if item.find("title") is not None else "untitled"
             )
             link = item.find("link").text if item.find("link") is not None else "#"
             description = (
                 item.find("description").text
                 if item.find("description") is not None
-                else "无描述"
+                else "no description"
             )
             pubDate = (
                 item.find("pubDate").text
                 if item.find("pubDate") is not None
-                else "未知时间"
+                else "unknown time"
             )
 
             news_items.append(
@@ -113,7 +113,7 @@ async def fetch_news_detail(url):
             return content[:2000]  # 限制长度
     except Exception as e:
         logger.bind(tag=TAG).error(f"获取新闻详情失败: {e}")
-        return "无法获取详细内容"
+        return "Unable to get detailed content"
 
 
 def map_category(category_text):
@@ -165,16 +165,16 @@ async def get_news_from_chinanews(
             ):
                 return ActionResponse(
                     Action.REQLLM,
-                    "抱歉，没有找到最近查询的新闻，请先获取一条新闻。",
+                    "Sorry, no recently queried news was found. Please fetch a news item first.",
                     None,
                 )
 
             link = conn.last_news_link.get("link")
-            title = conn.last_news_link.get("title", "未知标题")
+            title = conn.last_news_link.get("title", "unknown title")
 
             if link == "#":
                 return ActionResponse(
-                    Action.REQLLM, "抱歉，该新闻没有可用的链接获取详细内容。", None
+                    Action.REQLLM, "Sorry, there is no available link to fetch the details of this news item.", None
                 )
 
             logger.bind(tag=TAG).debug(f"获取新闻详情: {title}, URL={link}")
@@ -182,20 +182,20 @@ async def get_news_from_chinanews(
             # 获取新闻详情
             detail_content = await fetch_news_detail(link)
 
-            if not detail_content or detail_content == "无法获取详细内容":
+            if not detail_content or detail_content == "Unable to get detailed content":
                 return ActionResponse(
                     Action.REQLLM,
-                    f"抱歉，无法获取《{title}》的详细内容，可能是链接已失效或网站结构发生变化。",
+                    f"Sorry, the details of \"{title}\" could not be fetched; the link may have expired or the website structure may have changed.",
                     None,
                 )
 
             # 构建详情报告
             detail_report = (
-                f"根据下列数据，用{lang}回应用户的新闻详情查询请求：\n\n"
-                f"新闻标题: {title}\n"
-                f"详细内容: {detail_content}\n\n"
-                f"(请对上述新闻内容进行总结，提取关键信息，以自然、流畅的方式向用户播报，"
-                f"不要提及这是总结，就像是在讲述一个完整的新闻故事)"
+                f"Based on the data below, respond to the user's request for news details in {lang}:\n\n"
+                f"News title: {title}\n"
+                f"Details: {detail_content}\n\n"
+                f"(Summarize the news content above, extract the key points, and deliver it to the user in a natural, fluent way. "
+                f"Do not mention that this is a summary; tell it as if recounting a complete news story.)"
             )
 
             return ActionResponse(Action.REQLLM, detail_report, None)
@@ -224,7 +224,7 @@ async def get_news_from_chinanews(
 
         if not news_items:
             return ActionResponse(
-                Action.REQLLM, "抱歉，未能获取到新闻信息，请稍后再试。", None
+                Action.REQLLM, "Sorry, no news could be fetched. Please try again later.", None
             )
 
         # 随机选择一条新闻
@@ -235,18 +235,18 @@ async def get_news_from_chinanews(
             conn.last_news_link = {}
         conn.last_news_link = {
             "link": selected_news.get("link", "#"),
-            "title": selected_news.get("title", "未知标题"),
+            "title": selected_news.get("title", "unknown title"),
         }
 
         # 构建新闻报告
         news_report = (
-            f"根据下列数据，用{lang}回应用户的新闻查询请求：\n\n"
-            f"新闻标题: {selected_news['title']}\n"
-            f"发布时间: {selected_news['pubDate']}\n"
-            f"新闻内容: {selected_news['description']}\n"
-            f"(请以自然、流畅的方式向用户播报这条新闻，可以适当总结内容，"
-            f"直接读出新闻即可，不需要额外多余的内容。"
-            f"如果用户询问更多详情，告知用户可以说'请详细介绍这条新闻'获取更多内容)"
+            f"Based on the data below, respond to the user's news query in {lang}:\n\n"
+            f"News title: {selected_news['title']}\n"
+            f"Published at: {selected_news['pubDate']}\n"
+            f"News content: {selected_news['description']}\n"
+            f"(Announce this news to the user in a natural, fluent way. Summarizing the content a little is fine, "
+            f"but just read the news directly without extra padding. "
+            f"If the user asks for more details, tell them they can say 'please tell me more about this news' to get more content.)"
         )
 
         return ActionResponse(Action.REQLLM, news_report, None)
@@ -254,5 +254,5 @@ async def get_news_from_chinanews(
     except Exception as e:
         logger.bind(tag=TAG).error(f"获取新闻出错: {e}")
         return ActionResponse(
-            Action.REQLLM, "抱歉，获取新闻时发生错误，请稍后再试。", None
+            Action.REQLLM, "Sorry, an error occurred while fetching the news. Please try again later.", None
         )

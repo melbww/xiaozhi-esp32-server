@@ -21,7 +21,7 @@ class StreamTTSPerformanceTester:
     def __init__(self, config):
         self.config = config
         self.test_texts = [
-            "你好，这是一句话。"
+            "Hello, this is a sentence."
         ]
         self.results = []
     
@@ -403,7 +403,7 @@ class StreamTTSPerformanceTester:
                         "stream": "true",
                         "target_sr": 16000,
                         "audio_format": "pcm",
-                        "instruct_text": "请生成一段自然流畅的语音",
+                        "instruct_text": "Please generate a natural and fluent speech",
                     }
                     headers = {
                         "Authorization": f"Bearer {access_token}",
