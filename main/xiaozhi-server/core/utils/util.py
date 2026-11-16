@@ -500,21 +500,17 @@ def check_vad_update(before_config, new_config):
         or new_config["selected_module"].get("VAD") is None
     ):
         return False
-    update_vad = False
-    current_vad_module = before_config["selected_module"]["VAD"]
+    # 服务端公共配置可能没有配置 VAD（完全由智能体的差异化配置提供），
+    # 此时无法比较，直接按新配置初始化，避免 KeyError 中断后台初始化。
+    current_vad_module = (before_config.get("selected_module") or {}).get("VAD")
+    if current_vad_module is None:
+        return True
     new_vad_module = new_config["selected_module"]["VAD"]
-    current_vad_type = (
-        current_vad_module
-        if "type" not in before_config["VAD"][current_vad_module]
-        else before_config["VAD"][current_vad_module]["type"]
-    )
-    new_vad_type = (
-        new_vad_module
-        if "type" not in new_config["VAD"][new_vad_module]
-        else new_config["VAD"][new_vad_module]["type"]
-    )
-    update_vad = current_vad_type != new_vad_type
-    return update_vad
+    before_vad_config = (before_config.get("VAD") or {}).get(current_vad_module) or {}
+    new_vad_config = (new_config.get("VAD") or {}).get(new_vad_module) or {}
+    current_vad_type = before_vad_config.get("type", current_vad_module)
+    new_vad_type = new_vad_config.get("type", new_vad_module)
+    return current_vad_type != new_vad_type
 
 
 def check_asr_update(before_config, new_config):
@@ -523,8 +519,11 @@ def check_asr_update(before_config, new_config):
         or new_config["selected_module"].get("ASR") is None
     ):
         return False
-    update_asr = False
-    current_asr_module = before_config["selected_module"]["ASR"]
+    # 服务端公共配置可能没有配置 ASR（完全由智能体的差异化配置提供），
+    # 此时无法比较，直接按新配置初始化，避免 KeyError 中断后台初始化。
+    current_asr_module = (before_config.get("selected_module") or {}).get("ASR")
+    if current_asr_module is None:
+        return True
     new_asr_module = new_config["selected_module"]["ASR"]
 
     # 如果模块名称不同，就需要更新
@@ -532,18 +531,11 @@ def check_asr_update(before_config, new_config):
         return True
 
     # 如果模块名称相同，再比较类型
-    current_asr_type = (
-        current_asr_module
-        if "type" not in before_config["ASR"][current_asr_module]
-        else before_config["ASR"][current_asr_module]["type"]
-    )
-    new_asr_type = (
-        new_asr_module
-        if "type" not in new_config["ASR"][new_asr_module]
-        else new_config["ASR"][new_asr_module]["type"]
-    )
-    update_asr = current_asr_type != new_asr_type
-    return update_asr
+    before_asr_config = (before_config.get("ASR") or {}).get(current_asr_module) or {}
+    new_asr_config = (new_config.get("ASR") or {}).get(new_asr_module) or {}
+    current_asr_type = before_asr_config.get("type", current_asr_module)
+    new_asr_type = new_asr_config.get("type", new_asr_module)
+    return current_asr_type != new_asr_type
 
 
 def filter_sensitive_info(config: dict) -> dict:

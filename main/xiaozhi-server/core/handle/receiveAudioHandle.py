@@ -41,6 +41,17 @@ async def resume_vad_detection(conn: "ConnectionHandler"):
 
 
 async def startToChat(conn: "ConnectionHandler", text):
+    # 首条消息可能早于后台组件初始化完成。若此时直接进 LLM，会只带
+    # quick prompt，缺少增强 system prompt、TTS 格式约束和工具 few-shot。
+    ready_event = getattr(conn, "components_ready_event", None)
+    if ready_event is not None and not ready_event.is_set():
+        try:
+            await asyncio.wait_for(ready_event.wait(), timeout=10)
+        except asyncio.TimeoutError:
+            conn.logger.bind(tag=TAG).warning(
+                "组件初始化超时，使用当前可用配置继续对话"
+            )
+
     # 检查输入是否是JSON格式（包含说话人信息）
     speaker_name = None
     actual_text = text

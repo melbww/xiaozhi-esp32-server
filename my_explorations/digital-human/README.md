@@ -9,8 +9,9 @@
 | 组件 | 状态 |
 |------|------|
 | 后端全栈(对话引擎 :8000 / 智控台 :8002) | 已独立到 [`../server/`](../server/README.md) |
-| 数字人运行时 :8006(唤醒词 + 页面 + 日志页) | ⏸ 已停(2026-11-08 与机器人解耦);仅浏览器测试时用 `iac/start.sh [--background]` 启动 |
-| 页面 / Live Logs WebUI | http://127.0.0.1:8006/index.html · http://127.0.0.1:8006/logs.html(运行时启动后可用) |
+| 数字人运行时 :8006(唤醒词 + 页面托管) | ⏸ 已停(2026-11-08 与机器人解耦);仅浏览器测试时用 `iac/start.sh [--background]` 启动 |
+| 页面 | http://127.0.0.1:8006/index.html(运行时启动后可用) |
+| 实时日志面板 | 已独立为 [`../log-viewer/`](../log-viewer/README.md)(:8007,同时看机器人后端 / 智控台 / 本模块) |
 | 日志 | 运行时:`main/digital-human/digital-human.log` |
 
 > **边界（2026-11-09 拆分）:** 机器人后端（xiaozhi-server、manager-api、

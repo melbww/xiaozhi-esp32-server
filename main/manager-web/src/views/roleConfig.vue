@@ -863,39 +863,17 @@ export default {
       }
     },
     applyTemplateData(templateData) {
-      const rollbackState = this.cloneTtsDraft(this.lastValidTtsDraft) || this.captureTtsDraft();
-      const currentLanguage = this.selectedLanguage;
+      // 角色模板只应用"人设"部分（昵称、角色介绍、交互语言等）。
+      // 模板里的模型/音色字段在模板管理页不可编辑，如果在这里套用，
+      // 用户已经调好的 VAD/ASR/LLM/TTS/音色/语言会被整块重置，因此刻意忽略。
       this.form = {
         ...this.form,
         agentName: templateData.agentName || this.form.agentName,
-        ttsVoiceId: templateData.ttsVoiceId || this.form.ttsVoiceId,
         chatHistoryConf: templateData.chatHistoryConf || this.form.chatHistoryConf,
         systemPrompt: templateData.systemPrompt || this.form.systemPrompt,
         summaryMemory: templateData.summaryMemory || this.form.summaryMemory,
         langCode: templateData.langCode || this.form.langCode,
-        model: {
-          ttsModelId: templateData.ttsModelId || this.form.model.ttsModelId,
-          vadModelId: templateData.vadModelId || this.form.model.vadModelId,
-          asrModelId: templateData.asrModelId || this.form.model.asrModelId,
-          llmModelId: templateData.llmModelId || this.form.model.llmModelId,
-          slmModelId: templateData.llmModelId || this.form.model.slmModelId,
-          vllmModelId: templateData.vllmModelId || this.form.model.vllmModelId,
-          memModelId: templateData.memModelId || this.form.model.memModelId,
-          intentModelId: templateData.intentModelId || this.form.model.intentModelId,
-        },
       };
-      if (templateData.ttsLanguage) {
-        this.selectedLanguage = templateData.ttsLanguage;
-      }
-      if (templateData.ttsModelId || templateData.ttsVoiceId || templateData.ttsLanguage) {
-        this.fetchVoiceOptions(this.form.model.ttsModelId, {
-          autoSelectVoice: true,
-          preferredLanguage: templateData.ttsLanguage || (templateData.ttsVoiceId ? "" : currentLanguage),
-          preferredVoiceId: templateData.ttsVoiceId || "",
-          rollbackState,
-          markTouched: true
-        });
-      }
     },
     buildCurrentFunctions(savedMappings) {
       if (!Array.isArray(savedMappings)) {

@@ -1,7 +1,12 @@
 """Tests for the Message/Dialogue classes used to build LLM context."""
 import pytest
 
-from core.utils.dialogue import Dialogue, Message
+from core.utils.dialogue import (
+    Dialogue,
+    Message,
+    TOOL_EXAMPLE_PREFIX,
+    build_tool_call_fewshot_messages,
+)
 
 
 def test_message_assigns_default_uniq_id():
@@ -81,3 +86,59 @@ async def test_get_llm_dialogue_separates_temporary_few_shot_from_actual_history
     contents = [m["content"] for m in msgs if m["role"] == "user"]
     assert "real user msg" in contents
     assert "fewshot example" in contents
+
+
+def _fewshot_text(messages):
+    """Flatten text and tool-call arguments so tests can search all of it."""
+    parts = []
+    for message in messages:
+        if message.content:
+            parts.append(message.content)
+        for tool_call in message.tool_calls or []:
+            parts.append(tool_call.get("function", {}).get("arguments", ""))
+    return " ".join(parts)
+
+
+def test_tool_call_fewshot_is_temporary_and_marked_as_example():
+    messages = build_tool_call_fewshot_messages({"handle_exit_intent"})
+
+    assert messages
+    assert all(message.is_temporary for message in messages)
+
+    user_messages = [m for m in messages if m.role == "user"]
+    assert user_messages
+    assert all(
+        m.content.startswith(TOOL_EXAMPLE_PREFIX) for m in user_messages
+    )
+
+
+def test_tool_call_fewshot_has_no_story_or_pending_promise():
+    messages = build_tool_call_fewshot_messages({"handle_exit_intent"})
+    text = _fewshot_text(messages)
+
+    # Regression guard: the old example ("给我讲个故事吧" → "选一个我给你开讲")
+    # made weak models think a story was still pending in the real session.
+    assert "故事" not in text
+    assert "开讲" not in text
+
+
+def test_tool_call_fewshot_ends_with_direct_answer():
+    messages = build_tool_call_fewshot_messages({"handle_exit_intent"})
+
+    assistant_calls = [m for m in messages if m.tool_calls]
+    assert assistant_calls[-1].tool_calls[0]["function"]["name"] == "direct_answer"
+
+    tool_results = [m for m in messages if m.role == "tool"]
+    assert tool_results[-1].tool_call_id == "fewshot_da_001"
+
+
+def test_tool_call_fewshot_keeps_direct_answer_without_exit_tool():
+    messages = build_tool_call_fewshot_messages(set())
+
+    assert messages
+    called_tools = [
+        tool_call["function"]["name"]
+        for message in messages
+        for tool_call in (message.tool_calls or [])
+    ]
+    assert called_tools == ["direct_answer"]

@@ -1,0 +1,19 @@
+# =============================================================================
+# 开发调试覆盖: 用本地构建的 manager-web 前端替换镜像内置静态文件
+#
+# 目的: 修改 main/manager-web/src 后不必重打镜像, 只要 npm run build 再重启
+#       web 容器即可生效 (与 compose.server-source.yml 里的后端 bind-mount 同理)。
+#
+# 用法:
+#   cd main/manager-web && npm ci && npm run build
+#   my_explorations/server/iac/docker-stack.sh web    # 仅重建 web 容器
+#
+# 注意:
+#   - 宿主机 main/manager-web/dist 必须已构建, 否则容器内 nginx 只会返回 404;
+#     因此 docker-stack.sh 仅在 dist/index.html 存在时才追加本覆盖文件。
+#   - 本覆盖只替换前端静态资源, 容器内的 manager-api (8003) 仍是镜像自带版本。
+# =============================================================================
+services:
+  xiaozhi-esp32-server-web:
+    volumes:
+      - ${XIAOZHI_REPO_ROOT}/main/manager-web/dist:/usr/share/nginx/html:ro

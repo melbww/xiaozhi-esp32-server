@@ -113,16 +113,9 @@ import CustomButton from "@/components/CustomButton.vue";
 import CustomTable from "@/components/CustomTable.vue";
 import CustomDialog from "@/components/CustomDialog.vue";
 
-const DEFAULT_MODEL_CONFIG = {
-  ttsModelId: "TTS_EdgeTTS",
-  vadModelId: "VAD_SileroVAD",
-  asrModelId: "ASR_FunASR",
-  llmModelId: "LLM_ChatGLMLLM",
-  vllmModelId: "VLLM_ChatGLMVLLM",
-  memModelId: "Memory_nomem",
-  intentModelId: "Intent_function_call"
-};
-
+// 模板只保存"人设"（昵称/角色介绍等），不再携带模型与音色配置：
+// 这些字段在本页不可编辑，之前会被 DEFAULT_MODEL_CONFIG 悄悄写入并回传给后端，
+// 导致在角色配置页套用模板时把用户已调好的模型/音色整块重置。
 export default {
   name: "AgentTemplateManagement",
   components: {
@@ -153,8 +146,7 @@ export default {
         agentCode: "小智",
         agentName: "",
         systemPrompt: "",
-        sort: 0,
-        model: { ...DEFAULT_MODEL_CONFIG }
+        sort: 0
       },
       formRules: {
         agentName: [
@@ -234,8 +226,7 @@ export default {
         agentCode: "小智",
         agentName: this.$t("templateQuickConfig.newTemplate"),
         systemPrompt: "",
-        sort: 1,
-        model: { ...DEFAULT_MODEL_CONFIG }
+        sort: 1
       };
       this.originalForm = JSON.parse(JSON.stringify(this.form));
       this.dialogVisible = true;
@@ -253,16 +244,7 @@ export default {
             agentCode: template.agentCode || "小智",
             agentName: template.agentName || "",
             systemPrompt: template.systemPrompt || "",
-            sort: template.sort || 0,
-            model: {
-              ttsModelId: template.ttsModelId || DEFAULT_MODEL_CONFIG.ttsModelId,
-              vadModelId: template.vadModelId || DEFAULT_MODEL_CONFIG.vadModelId,
-              asrModelId: template.asrModelId || DEFAULT_MODEL_CONFIG.asrModelId,
-              llmModelId: template.llmModelId || DEFAULT_MODEL_CONFIG.llmModelId,
-              vllmModelId: template.vllmModelId || DEFAULT_MODEL_CONFIG.vllmModelId,
-              memModelId: template.memModelId || DEFAULT_MODEL_CONFIG.memModelId,
-              intentModelId: template.intentModelId || DEFAULT_MODEL_CONFIG.intentModelId
-            }
+            sort: template.sort || 0
           };
           this.originalForm = JSON.parse(JSON.stringify(this.form));
           this.dialogVisible = true;
@@ -281,8 +263,7 @@ export default {
           agentName: this.form.agentName,
           systemPrompt: this.form.systemPrompt,
           sort: this.form.sort,
-          functions: [],
-          ...this.form.model
+          functions: []
         };
 
         this.confirmLoading = true;

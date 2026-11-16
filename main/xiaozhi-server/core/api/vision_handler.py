@@ -131,7 +131,8 @@ class VisionHandler(BaseHandler):
 
             return_json = {
                 "success": True,
-                "action": Action.RESPONSE.name,
+                # Hand the text back to the main LLM; do not speak it directly.
+                "action": Action.REQLLM.name,
                 "response": result,
             }
 

@@ -1,4 +1,16 @@
 # 视觉模型使用指南
+
+> **2026-11-14 更新：默认路径改为图片直传主 LLM。**
+> 固件的 `self.camera.take_photo` 现在返回标准 MCP 图片内容，服务端把它作为
+> 图片消息追加到主 LLM 会话（主模型需支持图片输入，例如 `deepseek-flash`）。
+> 一般不再需要配置独立视觉模型。
+>
+> 本文档描述的是**可选的独立 VLM 通道**：固件需在编译时打开
+> `CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL`，工具名为
+> `self.camera.ask_vision`。该通道返回的文本现在会交回主 LLM 决定如何回复
+> （`Action.REQLLM`），不再直接送 TTS；服务端也不再追加
+> `(请使用中文回复)` 后缀。
+
 本教程分为两部分：
 - 第一部分：单模块运行xiaozhi-server开启视觉模型
 - 第二部分：全模块运行时，如何开启视觉模型

@@ -122,3 +122,13 @@ Python:        3.13.9 (venv: main/digital-human/.venv)
 - [ ] `xiaozhi-server` 未在本机运行,数字人页面暂不能联调语音 AI 链路(需另起 server)。
 - [ ] Docker IaC 仅在 Linux 宿主机可用(麦克风 `/dev/snd` 透传);macOS 请用脚本。
 - [ ] 唤醒词模型下载源为 GitHub,国内网络可能需要代理或改用 ModelScope。
+
+## 2026-11-12 · 日志面板拆分为独立应用
+
+- 原 `main/digital-human/logs.html` + `wakeword_runtime/log_streamer.py` 虽然挂在
+  digital-human(:8006)上,实际同时 tail `docker logs xiaozhi-esp32-server` 和本模块日志,
+  并不属于数字人本身。
+- 已拆到 [`../log-viewer/`](../log-viewer/README.md)(:8007):独立的 stdlib HTTP+WebSocket
+  服务,日志源在 `sources.json` 配置(`docker` / `file`),不依赖 digital-human 是否运行。
+- digital-human 运行时现在只负责页面托管 + 唤醒词 + 事件桥(:8006);`logs.html`、
+  `log_streamer.py` 及 `http_server.py` 里的 `/logs-ws` 路由已移除。
