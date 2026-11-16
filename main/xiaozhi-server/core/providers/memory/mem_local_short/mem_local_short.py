@@ -10,66 +10,66 @@ from core.utils.util import check_model_key
 
 
 short_term_memory_prompt = """
-# 时空记忆编织者
+# Spatiotemporal Memory Weaver
 
-## 核心使命
-构建可生长的动态记忆网络，在有限空间内保留关键信息的同时，智能维护信息演变轨迹
-根据对话记录，总结user的重要信息，以便在未来的对话中提供更个性化的服务
+## Core Mission
+Build a growable, dynamic memory network that keeps key information within limited space while intelligently maintaining the evolution trail of that information.
+Based on the conversation record, summarize the user's important information so that future conversations can be more personalized.
 
-## 记忆法则
-### 1. 三维度记忆评估（每次更新必执行）
-| 维度       | 评估标准                  | 权重分 |
-|------------|---------------------------|--------|
-| 时效性     | 信息新鲜度（按对话轮次） | 40%    |
-| 情感强度   | 含💖标记/重复提及次数     | 35%    |
-| 关联密度   | 与其他信息的连接数量      | 25%    |
+## Memory Laws
+### 1. Three-Dimensional Memory Assessment (run on every update)
+| Dimension        | Assessment Criteria                        | Weight |
+|------------------|--------------------------------------------|--------|
+| Timeliness       | Information freshness (by turn count)      | 40%    |
+| Emotional weight | Contains a 💖 marker / repeated mentions   | 35%    |
+| Link density     | Number of connections to other information  | 25%    |
 
-### 2. 动态更新机制
-**名字变更处理示例：**
-原始记忆："曾用名": ["张三"], "现用名": "张三丰"
-触发条件：当检测到「我叫X」「称呼我Y」等命名信号时
-操作流程：
-1. 将旧名移入"曾用名"列表
-2. 记录命名时间轴："2024-02-15 14:32:启用张三丰"
-3. 在记忆立方追加：「从张三到张三丰的身份蜕变」
+### 2. Dynamic Update Mechanism
+**Example of handling a name change:**
+Original memory: "former_names": ["John Smith"], "current_name": "John Smithson"
+Trigger condition: when naming signals such as "my name is X" or "call me Y" are detected
+Procedure:
+1. Move the old name into the "former_names" list
+2. Record the naming timeline: "2024-02-15 14:32: adopted John Smithson"
+3. Append to the memory cube: "Identity transformation from John Smith to John Smithson"
 
-### 3. 空间优化策略
-- **信息压缩术**：用符号体系提升密度
-  - ✅"张三丰[北/软工/🐱]"
-  - ❌"北京软件工程师，养猫"
-- **淘汰预警**：当总字数≥900时触发
-  1. 删除权重分<60且3轮未提及的信息
-  2. 合并相似条目（保留时间戳最近的）
+### 3. Space Optimization Strategy
+- **Information compression**: use a symbolic notation to increase density
+  - ✅"John Smithson[Beijing/Software/🐱]"
+  - ❌"A software engineer in Beijing who keeps a cat"
+- **Eviction warning**: triggered when the total character count ≥ 900
+  1. Delete information with a weight score < 60 that has not been mentioned for 3 turns
+  2. Merge similar entries (keep the one with the most recent timestamp)
 
-## 记忆结构
-输出格式必须为可解析的json字符串，不需要解释、注释和说明，保存记忆时仅从对话提取信息，不要混入示例内容
+## Memory Structure
+The output format must be a parseable JSON string with no explanation, comments, or notes. When saving memory, extract information only from the conversation and do not mix in example content.
 ```json
 {
-  "时空档案": {
-    "身份图谱": {
-      "现用名": "",
-      "特征标记": [] 
+  "spatiotemporal_profile": {
+    "identity_graph": {
+      "current_name": "",
+      "feature_tags": []
     },
-    "记忆立方": [
+    "memory_cube": [
       {
-        "事件": "入职新公司",
-        "时间戳": "2024-03-20",
-        "情感值": 0.9,
-        "关联项": ["下午茶"],
-        "保鲜期": 30 
+        "event": "Joined a new company",
+        "timestamp": "2024-03-20",
+        "emotion_score": 0.9,
+        "related_items": ["afternoon tea"],
+        "shelf_life": 30
       }
     ]
   },
-  "关系网络": {
-    "高频话题": {"职场": 12},
-    "暗线联系": [""]
+  "relationship_network": {
+    "frequent_topics": {"workplace": 12},
+    "hidden_connections": [""]
   },
-  "待响应": {
-    "紧急事项": ["需立即处理的任务"], 
-    "潜在关怀": ["可主动提供的帮助"]
+  "pending_response": {
+    "urgent_items": ["tasks that must be handled immediately"],
+    "potential_care": ["help that could be offered proactively"]
   },
-  "高光语录": [
-    "最打动人心的瞬间，强烈的情感表达，user的原话"
+  "highlight_quotes": [
+    "The most touching moment, a strong emotional expression, the user's exact words"
   ]
 }
 ```
@@ -166,12 +166,12 @@ class MemoryProvider(MemoryProviderBase):
             elif msg.role == "assistant":
                 msgStr += f"Assistant: {content}\n"
         if self.short_memory and len(self.short_memory) > 0:
-            msgStr += "历史记忆：\n"
+            msgStr += "Historical memory:\n"
             msgStr += self.short_memory
 
         # 当前时间
         time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        msgStr += f"当前时间：{time_str}"
+        msgStr += f"Current time: {time_str}"
 
         if self.save_to_file:
             try:

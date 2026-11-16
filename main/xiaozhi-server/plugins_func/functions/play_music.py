@@ -20,13 +20,13 @@ play_music_function_desc = {
     "type": "function",
     "function": {
         "name": "play_music",
-        "description": "当用户要求播放音乐、歌曲时调用。",
+        "description": "Call this when the user asks to play music or a song.",
         "parameters": {
             "type": "object",
             "properties": {
                 "song_name": {
                     "type": "string",
-                    "description": "歌曲名称，如果用户没有指定具体歌名则为'random', 明确指定的时返回音乐的名字 示例: ```用户:播放两只老虎\n参数：两只老虎``` ```用户:播放音乐 \n参数：random ```",
+                    "description": "The song name. If the user has not specified a particular song, use 'random'; if explicitly specified, return the name of the music. Examples: ```User: play Two Tigers\nParameter: Two Tigers``` ```User: play music\nParameter: random```",
                 }
             },
             "required": ["song_name"],
@@ -43,12 +43,12 @@ async def play_music(conn: "ConnectionHandler", song_name: str):
         )
         await handle_music_command(conn, music_intent)
         return ActionResponse(
-            action=Action.RECORD, result="指令已接收", response="正在为您播放音乐"
+            action=Action.RECORD, result="Command received", response="Playing music for you now"
         )
     except Exception as e:
         conn.logger.bind(tag=TAG).error(f"处理音乐意图错误: {e}")
         return ActionResponse(
-            action=Action.RESPONSE, result=str(e), response="播放音乐时出错了"
+            action=Action.RESPONSE, result=str(e), response="Something went wrong while playing the music"
         )
 
 
@@ -156,13 +156,13 @@ def _get_random_play_prompt(song_name):
     # 移除文件扩展名
     clean_name = os.path.splitext(song_name)[0]
     prompts = [
-        f"正在为您播放，《{clean_name}》",
-        f"请欣赏歌曲，《{clean_name}》",
-        f"即将为您播放，《{clean_name}》",
-        f"现在为您带来，《{clean_name}》",
-        f"让我们一起聆听，《{clean_name}》",
-        f"接下来请欣赏，《{clean_name}》",
-        f"此刻为您献上，《{clean_name}》",
+        f"Now playing for you, \"{clean_name}\"",
+        f"Please enjoy, \"{clean_name}\"",
+        f"Coming up for you, \"{clean_name}\"",
+        f"Here's one for you, \"{clean_name}\"",
+        f"Let's listen together to \"{clean_name}\"",
+        f"Up next, please enjoy \"{clean_name}\"",
+        f"Dedicated to you right now, \"{clean_name}\"",
     ]
     # 直接使用random.choice，不设置seed
     return random.choice(prompts)

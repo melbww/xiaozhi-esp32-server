@@ -218,7 +218,7 @@ class Dialogue:
                 if current_speaker_name and current_speaker_name != "未知说话人":
                     speakers = voiceprint_config.get("speakers", [])
                     speakers_info = "\n<speakers_info>"
-                    speakers_info += f"\n当前说话人：{current_speaker_name}"
+                    speakers_info += f"\nCurrent speaker: {current_speaker_name}"
                     for speaker_str in speakers:
                         try:
                             parts = speaker_str.split(",", 2)

@@ -20,7 +20,7 @@ class DeviceIoTExecutor(ToolExecutor):
         """执行设备端IoT工具"""
         if not self.has_tool(tool_name):
             return ActionResponse(
-                action=Action.NOTFOUND, response=f"IoT工具 {tool_name} 不存在"
+                action=Action.NOTFOUND, response=f"IoT tool {tool_name} does not exist"
             )
 
         try:
@@ -36,7 +36,7 @@ class DeviceIoTExecutor(ToolExecutor):
                     if value is not None:
                         # 处理响应模板
                         response_success = arguments.get(
-                            "response_success", "查询成功：{value}"
+                            "response_success", "Query succeeded: {value}"
                         )
                         response = response_success.replace("{value}", str(value))
 
@@ -46,7 +46,7 @@ class DeviceIoTExecutor(ToolExecutor):
                         )
                     else:
                         response_failure = arguments.get(
-                            "response_failure", f"无法获取{device_name}的状态"
+                            "response_failure", f"Unable to get the status of {device_name}"
                         )
                         return ActionResponse(
                             action=Action.ERROR, response=response_failure
@@ -73,7 +73,7 @@ class DeviceIoTExecutor(ToolExecutor):
                     # 等待状态更新
                     await asyncio.sleep(0.1)
 
-                    response_success = arguments.get("response_success", "操作成功")
+                    response_success = arguments.get("response_success", "Operation succeeded")
 
                     # 处理响应中的占位符
                     for param_name, param_value in control_params.items():
@@ -93,10 +93,10 @@ class DeviceIoTExecutor(ToolExecutor):
                         result=response_success,
                     )
 
-            return ActionResponse(action=Action.ERROR, response="无法解析IoT工具名称")
+            return ActionResponse(action=Action.ERROR, response="Unable to parse the IoT tool name")
 
         except Exception as e:
-            response_failure = arguments.get("response_failure", "操作失败")
+            response_failure = arguments.get("response_failure", "Operation failed")
             return ActionResponse(action=Action.ERROR, response=response_failure)
 
     async def _get_iot_status(self, device_name: str, property_name: str):
@@ -147,17 +147,17 @@ class DeviceIoTExecutor(ToolExecutor):
                         "type": "function",
                         "function": {
                             "name": tool_name,
-                            "description": f"查询{device_desc}的{prop_info['description']}",
+                            "description": f"Query the {prop_info['description']} of {device_desc}",
                             "parameters": {
                                 "type": "object",
                                 "properties": {
                                     "response_success": {
                                         "type": "string",
-                                        "description": f"查询成功时的友好回复，必须使用{{value}}作为占位符表示查询到的值",
+                                        "description": "A friendly reply for a successful query. You must use {{value}} as a placeholder for the queried value",
                                     },
                                     "response_failure": {
                                         "type": "string",
-                                        "description": f"查询失败时的友好回复",
+                                        "description": "A friendly reply for a failed query",
                                     },
                                 },
                                 "required": ["response_success", "response_failure"],
@@ -200,11 +200,11 @@ class DeviceIoTExecutor(ToolExecutor):
                         {
                             "response_success": {
                                 "type": "string",
-                                "description": "操作成功时的友好回复",
+                                "description": "A friendly reply for a successful operation",
                             },
                             "response_failure": {
                                 "type": "string",
-                                "description": "操作失败时的友好回复",
+                                "description": "A friendly reply for a failed operation",
                             },
                         }
                     )

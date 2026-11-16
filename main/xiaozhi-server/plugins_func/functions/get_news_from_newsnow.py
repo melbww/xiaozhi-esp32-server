@@ -111,21 +111,21 @@ GET_NEWS_FROM_NEWSNOW_FUNCTION_DESC = {
     "type": "function",
     "function": {
         "name": "get_news_from_newsnow",
-        "description": "当用户要求查看或收听新闻时调用（如'来条新闻''今天有什么新闻'）。",
+        "description": "Call this when the user asks to view or listen to the news (e.g. 'give me a news item', 'what's in the news today').",
         "parameters": {
             "type": "object",
             "properties": {
                 "source": {
                     "type": "string",
-                    "description": f"新闻源的标准中文名称，例如{example_sources_str}等。可选参数，如果不提供则使用默认新闻源",
+                    "description": f"The standard Chinese name of the news source, e.g. {example_sources_str}, etc. Optional parameter; if not provided, the default news source is used",
                 },
                 "detail": {
                     "type": "boolean",
-                    "description": "是否获取详细内容，默认为false。如果为true，则获取上一条新闻的详细内容",
+                    "description": "Whether to fetch the detailed content; defaults to false. If true, fetches the detailed content of the previous news item",
                 },
                 "lang": {
                     "type": "string",
-                    "description": "返回用户使用的语言code，例如zh_CN/zh_HK/en_US/ja_JP等，默认zh_CN",
+                    "description": "The language code to reply to the user in, e.g. en_US, ja_JP, zh_CN; defaults to en_US",
                 },
             },
             "required": ["lang"],
@@ -187,12 +187,12 @@ async def fetch_news_detail(url):
         # 如果清理后的内容为空，返回提示信息
         if not clean_text or len(clean_text.strip()) == 0:
             logger.bind(tag=TAG).warning(f"清理后的新闻内容为空: {url}")
-            return "无法解析新闻详情内容，可能是网站结构特殊或内容受限。"
+            return "Unable to parse the news detail content; the website structure may be unusual or the content may be restricted."
 
         return clean_text
     except Exception as e:
         logger.bind(tag=TAG).error(f"获取新闻详情失败: {e}")
-        return "无法获取详细内容"
+        return "Unable to get detailed content"
 
 
 @register_function(
@@ -204,7 +204,7 @@ async def get_news_from_newsnow(
     conn: "ConnectionHandler",
     source: str = "澎湃新闻",
     detail: bool = False,
-    lang: str = "zh_CN",
+    lang: str = "en_US",
 ):
     """获取新闻并随机选择一条进行播报，或获取上一条新闻的详细内容"""
     try:
@@ -221,18 +221,18 @@ async def get_news_from_newsnow(
             ):
                 return ActionResponse(
                     Action.REQLLM,
-                    "抱歉，没有找到最近查询的新闻，请先获取一条新闻。",
+                    "Sorry, no recently queried news was found. Please fetch a news item first.",
                     None,
                 )
 
             url = conn.last_newsnow_link.get("url")
-            title = conn.last_newsnow_link.get("title", "未知标题")
+            title = conn.last_newsnow_link.get("title", "unknown title")
             source_id = conn.last_newsnow_link.get("source_id", "thepaper")
-            source_name = CHANNEL_MAP.get(source_id, "未知来源")
+            source_name = CHANNEL_MAP.get(source_id, "unknown source")
 
             if not url or url == "#":
                 return ActionResponse(
-                    Action.REQLLM, "抱歉，该新闻没有可用的链接获取详细内容。", None
+                    Action.REQLLM, "Sorry, there is no available link to fetch the details of this news item.", None
                 )
 
             logger.bind(tag=TAG).debug(
@@ -242,21 +242,21 @@ async def get_news_from_newsnow(
             # 获取新闻详情
             detail_content = await fetch_news_detail(url)
 
-            if not detail_content or detail_content == "无法获取详细内容":
+            if not detail_content or detail_content == "Unable to get detailed content":
                 return ActionResponse(
                     Action.REQLLM,
-                    f"抱歉，无法获取《{title}》的详细内容，可能是链接已失效或网站结构发生变化。",
+                    f"Sorry, the details of \"{title}\" could not be fetched; the link may have expired or the website structure may have changed.",
                     None,
                 )
 
             # 构建详情报告
             detail_report = (
-                f"根据下列数据，用{lang}回应用户的新闻详情查询请求：\n\n"
-                f"新闻标题: {title}\n"
-                # f"新闻来源: {source_name}\n"
-                f"详细内容: {detail_content}\n\n"
-                f"(请对上述新闻内容进行总结，提取关键信息，以自然、流畅的方式向用户播报，"
-                f"不要提及这是总结，就像是在讲述一个完整的新闻)"
+                f"Based on the data below, respond to the user's request for news details in {lang}:\n\n"
+                f"News title: {title}\n"
+                # f"News source: {source_name}\n"
+                f"Details: {detail_content}\n\n"
+                f"(Summarize the news content above, extract the key points, and deliver it to the user in a natural, fluent way. "
+                f"Do not mention that this is a summary; tell it as if recounting a complete news story.)"
             )
 
             return ActionResponse(Action.REQLLM, detail_report, None)
@@ -293,13 +293,13 @@ async def get_news_from_newsnow(
         if not news_items:
             return ActionResponse(
                 Action.REQLLM,
-                f"抱歉，未能从{source}获取到新闻信息，请稍后再试或尝试其他新闻源。",
+                f"Sorry, no news could be fetched from {source}. Please try again later or try another news source.",
                 None,
             )
 
         # 随机选择一条新闻
         selected_news = random.choice(news_items)
-        title = selected_news.get("title", "未知标题")
+        title = selected_news.get("title", "unknown title")
 
         # 保存当前新闻链接到连接对象，以便后续查询详情
         if not hasattr(conn, "last_newsnow_link"):
@@ -312,11 +312,11 @@ async def get_news_from_newsnow(
 
         # 构建新闻报告
         news_report = (
-            f"根据下列数据，用{lang}回应用户的新闻查询请求：\n\n"
-            f"新闻标题: {title}\n"
-            # f"新闻来源: {source}\n"
-            f"(请以自然、流畅的方式向用户播报这条新闻标题，"
-            f"提示用户可以要求获取详细内容，此时会获取新闻的详细内容。)"
+            f"Based on the data below, respond to the user's news query in {lang}:\n\n"
+            f"News title: {title}\n"
+            # f"News source: {source}\n"
+            f"(Announce this news headline to the user in a natural, fluent way, "
+            f"and let the user know they can ask for details, which will then be fetched.)"
         )
 
         return ActionResponse(Action.REQLLM, news_report, None)
@@ -324,5 +324,5 @@ async def get_news_from_newsnow(
     except Exception as e:
         logger.bind(tag=TAG).error(f"获取新闻出错: {e}")
         return ActionResponse(
-            Action.REQLLM, "抱歉，获取新闻时发生错误，请稍后再试。", None
+            Action.REQLLM, "Sorry, an error occurred while fetching the news. Please try again later.", None
         )

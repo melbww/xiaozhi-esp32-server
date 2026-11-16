@@ -263,7 +263,7 @@ class App {
                 }
             };
 
-            window.takePhoto = (question = '描述一下看到的物品') => {
+            window.takePhoto = (question = 'Describe what you see') => {
                 return new Promise(async (resolve) => {
                     const canvas = document.createElement('canvas');
                     const video = cameraVideo;

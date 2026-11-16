@@ -73,8 +73,8 @@ public class AgentEntity {
     @Schema(description = "角色设定参数")
     private String systemPrompt;
 
-    @Schema(description = "总结记忆", example = "构建可生长的动态记忆网络，在有限空间内保留关键信息的同时，智能维护信息演变轨迹\n" +
-            "根据对话记录，总结user的重要信息，以便在未来的对话中提供更个性化的服务", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(description = "总结记忆", example = "Build a growable, dynamic memory network that keeps key information within limited space while intelligently maintaining the evolution trail of that information\n" +
+            "Based on the conversation record, summarize the user's important information so that future conversations can be more personalized", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String summaryMemory;
 
     @Schema(description = "语言编码")

@@ -15,10 +15,10 @@ SEARCH_FROM_RAGFLOW_FUNCTION_DESC = {
     "type": "function",
     "function": {
         "name": "search_from_ragflow",
-        "description": "从知识库中查询信息",
+        "description": "Query information from the knowledge base",
         "parameters": {
             "type": "object",
-            "properties": {"question": {"type": "string", "description": "查询的问题"}},
+            "properties": {"question": {"type": "string", "description": "The question to query"}},
             "required": ["question"],
         },
     },
@@ -63,7 +63,7 @@ async def search_from_ragflow(conn: "ConnectionHandler", question=None):
         result = json.loads(response_text)
 
         if result.get("code") != 0:
-            error_detail = result.get("error", {}).get("detail", "未知错误")
+            error_detail = result.get("error", {}).get("detail", "unknown error")
             error_message = result.get("error", {}).get("message", "")
             error_code = result.get("code", "")
 
@@ -73,12 +73,12 @@ async def search_from_ragflow(conn: "ConnectionHandler", question=None):
             )
 
             # 构建详细的错误响应
-            error_response = f"RAG接口返回异常（错误码：{error_code}）"
+            error_response = f"The RAG interface returned an error (error code: {error_code})"
 
             if error_message:
-                error_response += f"：{error_message}"
+                error_response += f": {error_message}"
             if error_detail:
-                error_response += f"\n详情：{error_detail}"
+                error_response += f"\nDetails: {error_detail}"
 
             return ActionResponse(Action.RESPONSE, None, error_response)
 
@@ -97,37 +97,37 @@ async def search_from_ragflow(conn: "ConnectionHandler", question=None):
 
         if contents:
             # 组织知识库内容为引用模式
-            context_text = f"# 关于问题【{question}】查到知识库如下\n"
+            context_text = f"# The knowledge base returned the following for the question [{question}]\n"
             context_text += "```\n\n\n".join(contents[:5])
             context_text += "\n```"
         else:
-            context_text = "根据知识库查询结果，没有相关信息。"
+            context_text = "Based on the knowledge base results, there is no relevant information."
         return ActionResponse(Action.REQLLM, context_text, None)
 
     except httpx.TimeoutException as e:
-        error_response = "RAG接口请求超时"
-        error_response += "\n可能原因：RAGflow服务响应缓慢或网络延迟"
-        error_response += "\n解决方案：请稍后重试或检查RAGflow服务性能"
+        error_response = "The RAG interface request timed out"
+        error_response += "\nPossible cause: the RAGflow service is responding slowly or there is network latency"
+        error_response += "\nSolution: retry later or check the performance of the RAGflow service"
         return ActionResponse(Action.RESPONSE, None, error_response)
 
     except httpx.HTTPStatusError as e:
         if hasattr(e.response, "status_code"):
             status_code = e.response.status_code
-            error_response = f"RAG接口HTTP错误（状态码：{status_code}）"
+            error_response = f"RAG interface HTTP error (status code: {status_code})"
             try:
                 error_detail = e.response.json().get("error", {}).get("message", "")
                 if error_detail:
-                    error_response += f"\n错误详情：{error_detail}"
+                    error_response += f"\nError details: {error_detail}"
             except:
                 pass
         else:
-            error_response = f"RAG接口HTTP异常：{str(e)}"
+            error_response = f"RAG interface HTTP exception: {str(e)}"
         return ActionResponse(Action.RESPONSE, None, error_response)
 
     except httpx.HTTPError as e:
-        error_response = "无法连接到RAG接口"
-        error_response += "\n可能原因：RAGflow服务地址错误或服务未运行"
-        error_response += "\n解决方案：请检查RAGflow服务地址配置和服务状态"
+        error_response = "Unable to connect to the RAG interface"
+        error_response += "\nPossible cause: the RAGflow service address is wrong or the service is not running"
+        error_response += "\nSolution: check the RAGflow service address configuration and service status"
         return ActionResponse(Action.RESPONSE, None, error_response)
 
     except Exception as e:
@@ -138,5 +138,5 @@ async def search_from_ragflow(conn: "ConnectionHandler", question=None):
         )
 
         # 提供详细的错误信息
-        error_response = f"RAG接口处理异常（{error_type}）：{str(e)}"
+        error_response = f"RAG interface processing exception ({error_type}): {str(e)}"
         return ActionResponse(Action.RESPONSE, None, error_response)

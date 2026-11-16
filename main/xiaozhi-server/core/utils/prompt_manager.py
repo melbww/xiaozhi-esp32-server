@@ -186,7 +186,7 @@ class PromptManager:
             async def _call():
                 try:
                     result_holder.append(
-                        await get_weather(conn, location=location, lang="zh_CN")
+                        await get_weather(conn, location=location, lang="en_US")
                     )
                 except Exception as e:
                     exception_holder.append(e)
@@ -293,7 +293,7 @@ class PromptManager:
                 self.config.get("TTS", {})
                 .get(self.config.get("selected_module", {}).get("TTS", ""), {})
                 .get("language")
-                or "中文"
+                or "English"
             )
             self.logger.bind(tag=TAG).debug(f"获取到选择的语言: {language}")
 

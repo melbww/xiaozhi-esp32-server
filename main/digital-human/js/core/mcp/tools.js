@@ -486,7 +486,7 @@ export async function executeMcpTool(toolName, toolArgs) {
     // 处理拍照工具
     if (toolName === 'self_camera_take_photo') {
         if (typeof window.takePhoto === 'function') {
-            const question = toolArgs && toolArgs.question ? toolArgs.question : '描述一下看到的物品';
+            const question = toolArgs && toolArgs.question ? toolArgs.question : 'Describe what you see';
             log(`正在执行拍照: ${question}`, 'info');
             const result = await window.takePhoto(question);
             return result;

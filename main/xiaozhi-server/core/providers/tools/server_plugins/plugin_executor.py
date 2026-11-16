@@ -23,7 +23,7 @@ class ServerPluginExecutor(ToolExecutor):
         func_item = all_function_registry.get(tool_name)
         if not func_item:
             return ActionResponse(
-                action=Action.NOTFOUND, response=f"插件函数 {tool_name} 不存在"
+                action=Action.NOTFOUND, response=f"Plugin function {tool_name} does not exist"
             )
 
         try:
@@ -147,10 +147,10 @@ class ServerPluginExecutor(ToolExecutor):
         )
         if not news_sources:
             news_sources = "澎湃新闻;百度热搜;财联社"
-        sources_str = news_sources.replace(";", "、")
+        sources_str = news_sources.replace(";", ", ")
         try:
             func_item.description["function"]["parameters"]["properties"]["source"][
                 "description"
-            ] = f"新闻源的标准中文名称，例如{sources_str}等。可选参数，如果不提供则使用默认新闻源"
+            ] = f"The standard Chinese name of the news source, e.g. {sources_str}, etc. Optional parameter; if not provided, the default news source is used"
         except (KeyError, TypeError):
             pass

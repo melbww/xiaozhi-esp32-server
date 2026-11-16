@@ -14,7 +14,7 @@ from config.settings import load_config
 # 设置全局日志级别为 WARNING，抑制 INFO 级别日志
 logging.basicConfig(level=logging.WARNING)
 
-description = "大语言模型性能测试"
+description = "Large language model performance test"
 
 
 class LLMPerformanceTester:
@@ -25,11 +25,11 @@ class LLMPerformanceTester:
         self.test_sentences = self.config.get("module_test", {}).get(
             "test_sentences",
             [
-                "你好，我今天心情不太好，能安慰一下我吗？",
-                "帮我查一下明天的天气如何？",
-                "我想听一个有趣的故事，你能给我讲一个吗？",
-                "现在几点了？今天是星期几？",
-                "我想设置一个明天早上8点的闹钟提醒我开会",
+                "Hi, I'm feeling a bit down today. Can you cheer me up?",
+                "Can you check what the weather will be like tomorrow?",
+                "I'd like to hear an interesting story. Can you tell me one?",
+                "What time is it? What day of the week is it today?",
+                "I want to set an alarm for 8 AM tomorrow to remind me about a meeting",
             ],
         )
         self.results = {}
@@ -44,21 +44,21 @@ class LLMPerformanceTester:
                 content = f.read()
                 # 替换模板变量为测试值
                 content = content.replace(
-                    "{{base_prompt}}", "你是小智，一个聪明可爱的AI助手"
+                    "{{base_prompt}}", "You are Xiao Zhi, a smart and adorable AI assistant"
                 )
                 content = content.replace(
                     "{{emojiList}}", "😀,😃,😄,😁,😊,😍,🤔,😮,😱,😢,😭,😴,😵,🤗,🙄"
                 )
-                content = content.replace("{{current_time}}", "2024年8月17日 12:30:45")
-                content = content.replace("{{today_date}}", "2024年8月17日")
-                content = content.replace("{{today_weekday}}", "星期六")
-                content = content.replace("{{lunar_date}}", "甲辰年七月十四")
-                content = content.replace("{{local_address}}", "北京市")
-                content = content.replace("{{weather_info}}", "今天晴，25-32℃")
+                content = content.replace("{{current_time}}", "2024-08-17 12:30:45")
+                content = content.replace("{{today_date}}", "2024-08-17")
+                content = content.replace("{{today_weekday}}", "Saturday")
+                content = content.replace("{{lunar_date}}", "Day 14 of the 7th lunar month, Jia Chen year")
+                content = content.replace("{{local_address}}", "Beijing")
+                content = content.replace("{{weather_info}}", "Sunny today, 25-32℃")
                 return content
         except Exception as e:
             print(f"无法加载系统提示词文件: {e}")
-            return "你是小智，一个聪明可爱的AI助手。请用温暖友善的语气回复用户。"
+            return "You are Xiao Zhi, a smart and adorable AI assistant. Please reply to the user in a warm and friendly tone."
 
     def _collect_response_sync(self, llm, messages, llm_name, sentence_start):
         """同步收集响应数据的辅助方法"""
