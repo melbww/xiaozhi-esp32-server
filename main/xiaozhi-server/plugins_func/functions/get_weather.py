@@ -30,7 +30,7 @@ GET_WEATHER_FUNCTION_DESC = {
                 },
                 "lang": {
                     "type": "string",
-                    "description": "The language code to reply to the user in, e.g. zh_CN/zh_HK/en_US/ja_JP; defaults to zh_CN",
+                    "description": "The language code to reply to the user in, e.g. en_US, ja_JP, zh_CN; defaults to en_US",
                 },
             },
             "required": ["lang"],
@@ -120,7 +120,7 @@ async def fetch_city_info(location, api_key, api_host):
             params={
                 "key": api_key,
                 "location": location,
-                "lang": "zh",
+                "lang": "en",
                 "number": 1,
             },
             headers=HEADERS,
@@ -149,7 +149,7 @@ async def fetch_weather_data(city_info, api_key, api_host):
         return None
 
     base_url = f"https://{api_host}/v7/weather"
-    params = {"key": api_key, "location": location_id, "lang": "zh"}
+    params = {"key": api_key, "location": location_id, "lang": "en"}
 
     async def request(client, endpoint):
         response = await client.get(f"{base_url}/{endpoint}", params=params, headers=HEADERS)
@@ -249,7 +249,7 @@ def parse_weather_info(soup):
 
 
 @register_function("get_weather", GET_WEATHER_FUNCTION_DESC, ToolType.SYSTEM_CTL)
-async def get_weather(conn: "ConnectionHandler", location: str = None, lang: str = "zh_CN"):
+async def get_weather(conn: "ConnectionHandler", location: str = None, lang: str = "en_US"):
     from core.utils.cache.manager import cache_manager, CacheType
 
     weather_config = conn.config.get("plugins", {}).get("get_weather", {})

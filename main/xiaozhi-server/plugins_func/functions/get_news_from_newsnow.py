@@ -125,7 +125,7 @@ GET_NEWS_FROM_NEWSNOW_FUNCTION_DESC = {
                 },
                 "lang": {
                     "type": "string",
-                    "description": "The language code to reply to the user in, e.g. zh_CN/zh_HK/en_US/ja_JP; defaults to zh_CN",
+                    "description": "The language code to reply to the user in, e.g. en_US, ja_JP, zh_CN; defaults to en_US",
                 },
             },
             "required": ["lang"],
@@ -204,7 +204,7 @@ async def get_news_from_newsnow(
     conn: "ConnectionHandler",
     source: str = "澎湃新闻",
     detail: bool = False,
-    lang: str = "zh_CN",
+    lang: str = "en_US",
 ):
     """获取新闻并随机选择一条进行播报，或获取上一条新闻的详细内容"""
     try:

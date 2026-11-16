@@ -772,9 +772,9 @@ TTS:
   EdgeTTS:
     # 定义TTS API类型
     type: edge
-    voice: zh-CN-XiaoxiaoNeural
+    voice: en-US-AriaNeural
     output_dir: tmp/
-    # language: "中文"  # 指定输出语种,如:中文、英语、日语、韩语等,请根据所选音色支持的语言进行设置,不填则默认为中文
+    # language: "English"  # 指定输出语种,如:中文、英语、日语、韩语等,请根据所选音色支持的语言进行设置,不填则默认为中文
   DoubaoTTS:
     # 定义TTS API类型
     type: doubao
